@@ -16,8 +16,8 @@ section .rodata
 
     LF                           equ 10
 
-    hello_world                  db "Hello, World!", LF
-    hello_world.len              equ $-hello_world
+    abort_error                  db "The process has been aborted", LF, 0
+    abort_error.len              equ $-abort_error
     cstring                      db "This is a C-string!!!", LF, 0
 
     xdg_runtime_dir_template     db "XDG_RUNTIME_DIR", 0
@@ -25,8 +25,8 @@ section .rodata
     wayland_socket_path          db "/run/user/1000/wayland-1", 0
 
     addr:
-        .sun_family dw AF_UNIX
-        .sun_path   db "/run/user/1000/wayland-1"
+        .sun_family              dw AF_UNIX
+        .sun_path                db "/run/user/1000/wayland-12"
     addr_len                     equ $-addr
 
 section .bss
@@ -110,6 +110,13 @@ exit_on_error:
     ; if code != 0 {
     cmp rax, 0
     jge .end_if
+
+        ; write(STDOUT, abort_error, abort_error.len)
+        mov rax, SYSCALL_WRITE
+        mov rdi, STDOUT
+        mov rsi, abort_error
+        mov rdx, abort_error.len
+        syscall
 
         ; exit(EXIT_FAILURE)
         mov rax, SYSCALL_EXIT
