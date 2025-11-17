@@ -26,7 +26,7 @@ section .rodata
 
     addr:
         .sun_family              dw AF_UNIX
-        .sun_path                db "/run/user/1000/wayland-12"
+        .sun_path                db "/run/user/1000/wayland-1"
     addr_len                     equ $-addr
 
 section .bss
