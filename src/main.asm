@@ -110,10 +110,8 @@ get_env:
     ; let (i := rbx) = 0
     xor rbx, rbx
 
-    ; for (envp[i] := rsi) != null, i += 1 {
-    sub rbx, 1 ; overflow rbx i bit
+    ; for (envp[i] := rsi) != null {
     .while:
-    inc rbx
     mov rsi, qword [envp]
     mov rsi, qword [rsi+8*rbx]
     test rsi, rsi
@@ -122,13 +120,19 @@ get_env:
         ; let (match_len := rcx) = cstr_match_length(envp[i], name)
         call cstr_match_length
 
-        ; if match_len != name_len { continue }
+        ; if match_len == name_len {
         cmp rcx, rdx
-        jne .while
+        jne .end_if
 
-        ; return envp[i][match_len + 1..]
-        lea rsi, [rsi+rcx+1]
-        ret
+            ; return envp[i][match_len + 1..]
+            lea rsi, [rsi+rcx+1]
+            ret
+
+        ; }
+        .end_if:
+
+        ; i += 1
+        inc rbx
 
     ; }
     jmp .while
