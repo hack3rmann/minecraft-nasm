@@ -1,6 +1,13 @@
 section .rodata
     SYSCALL_WRITE                equ 1
+    SYSCALL_CLOSE                equ 3
+    SYSCALL_SOCKET               equ 41
+    SYSCALL_CONNECT              equ 42
     SYSCALL_EXIT                 equ 60
+
+    AF_UNIX                      equ 1
+    SOCK_STREAM                  equ 1
+    SOCK_CLOEXEC                 equ 0x80000
 
     EXIT_SUCCESS                 equ 0
     EXIT_FAILURE                 equ 1
@@ -15,6 +22,12 @@ section .rodata
 
     xdg_runtime_dir_template     db "XDG_RUNTIME_DIR", 0
     xdg_runtime_dir_template.len equ $-xdg_runtime_dir_template-1
+    wayland_socket_path          db "/run/user/1000/wayland-1", 0
+
+    addr:
+        .sun_family dw AF_UNIX
+        .sun_path   db "/run/user/1000/wayland-1"
+    addr_len                     equ $-addr
 
 section .bss
     ; static argc: usize
@@ -23,6 +36,8 @@ section .bss
     argv resq 1
     ; static envp: *const *const u8
     envp resq 1
+    ; static display_fd: usize
+    display_fd resq 1
 
 section .text
 
@@ -37,6 +52,12 @@ section .text
 
     pop rax
 %endmacro
+
+struc sockaddr_un
+    .sun_family resw 1
+    .sun_path   resb 126
+    .sizeof     equ $-.sun_family
+endstruc
 
 ; #[nocall]
 ; #[noreturn]
@@ -84,26 +105,54 @@ start:
     mov rax, SYSCALL_EXIT
     syscall
 
+; fn exit_on_error((code := rax): usize)
+exit_on_error:
+    ; if code != 0 {
+    cmp rax, 0
+    jge .end_if
+
+        ; exit(EXIT_FAILURE)
+        mov rax, SYSCALL_EXIT
+        mov rdi, EXIT_FAILURE
+        syscall
+
+    ; }
+    .end_if:
+
+    ret
+
 ; #[fastcall(all)]
 ; pub fn main() -> i64
 global main
 main:
-    ; let (xdg_runtime_dir := rsi) = get_env("XDG_RUNTIME_DIR", "XDG_RUNTIME_DIR".len)
-    mov rdi, xdg_runtime_dir_template
-    mov rdx, xdg_runtime_dir_template.len
-    call get_env
+    ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
+    mov rax, SYSCALL_SOCKET
+    mov rdi, AF_UNIX
+    mov rsi, SOCK_STREAM | SOCK_CLOEXEC
+    xor rdx, rdx
+    syscall
+    call exit_on_error
+    mov qword [display_fd], rax
 
-    ; print_cstr(xdg_runtime_dir)
-    call print_cstr
+    ; connect(display_fd, &const addr, addr_len)
+    mov rax, SYSCALL_CONNECT
+    mov rdi, qword [display_fd]
+    mov rsi, addr
+    mov rdx, addr_len
+    syscall
+    call exit_on_error
 
-    ; newline()
-    PUTCHAR LF
+    ; close(fd)
+    mov rax, SYSCALL_CLOSE
+    mov rdi, qword [display_fd]
+    syscall
+    call exit_on_error
 
     ; return EXIT_SUCCESS
     xor rax, rax
     ret
 
-; #[fastcall(rbx, rcx, ax, rdx)]
+; #[fastcall(rbx, rcx, ax)]
 ; pub unsafe fn get_env((name: rdi): *const u8, (name_len := rdx): usize) -> *const u8 := rsi
 global get_env
 get_env:
@@ -117,7 +166,7 @@ get_env:
     test rsi, rsi
     jz .end_while
 
-        ; let (match_len := rcx) = cstr_match_length(envp[i], name)
+        ; let (match_len := rcx) = cstr_match_length(envp[i] := rsi, name := rdi)
         call cstr_match_length
 
         ; if match_len == name_len {
