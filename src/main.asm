@@ -1,10 +1,22 @@
 section .rodata
+    SYSCALL_WRITE   equ 1
+    SYSCALL_EXIT    equ 60
+
+    EXIT_SUCCESS    equ 0
+    EXIT_FAILURE    equ 1
+
+    STDOUT          equ 1
+
     LF              equ 10
+
     hello_world     db "Hello, World!", LF
-    hello_world_len equ $-hello_world
+    hello_world.len equ $-hello_world
 
 section .text
 
+; #[fastcall]
+; #[noreturn]
+; fn start() -> !
 global start
 start:
     ; let (exit_code := rax) = main()
@@ -12,19 +24,20 @@ start:
 
     ; exit(exit_code)
     mov rdi, rax
-    mov rax, 60
+    mov rax, SYSCALL_EXIT
     syscall
 
+; #[fastcall]
 ; fn main() -> i32
 global main
 main:
-    ; write(STDOUT_FILENO, hello_world, hello_world_len)
-    mov rax, 1
-    mov rdi, 1
+    ; write(STDOUT, hello_world, hello_world_len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
     mov rsi, hello_world
-    mov rdx, hello_world_len
+    mov rdx, hello_world.len
     syscall
-    
-    ; return 0
+
+    ; return EXIT_SUCCESS
     xor rax, rax
     ret
