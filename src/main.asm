@@ -1,17 +1,20 @@
 section .rodata
-    SYSCALL_WRITE   equ 1
-    SYSCALL_EXIT    equ 60
+    SYSCALL_WRITE                equ 1
+    SYSCALL_EXIT                 equ 60
 
-    EXIT_SUCCESS    equ 0
-    EXIT_FAILURE    equ 1
+    EXIT_SUCCESS                 equ 0
+    EXIT_FAILURE                 equ 1
 
-    STDOUT          equ 1
+    STDOUT                       equ 1
 
-    LF              equ 10
+    LF                           equ 10
 
-    hello_world     db "Hello, World!", LF
-    hello_world.len equ $-hello_world
-    cstring         db "This is a C-string!!!", LF, 0
+    hello_world                  db "Hello, World!", LF
+    hello_world.len              equ $-hello_world
+    cstring                      db "This is a C-string!!!", LF, 0
+
+    xdg_runtime_dir_template     db "XDG_RUNTIME_DIR", 0
+    xdg_runtime_dir_template.len equ $-xdg_runtime_dir_template-1
 
 section .bss
     ; static argc: usize
@@ -23,9 +26,21 @@ section .bss
 
 section .text
 
+%macro PUTCHAR 1
+    push %1
+
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, rsp
+    mov rdx, 1
+    syscall
+
+    pop rax
+%endmacro
+
 ; #[nocall]
 ; #[noreturn]
-; fn start() -> !
+; pub fn start() -> !
 global start
 start:
     ; Higher addresses
@@ -70,20 +85,98 @@ start:
     syscall
 
 ; #[fastcall(all)]
-; fn main() -> i64
+; pub fn main() -> i64
 global main
 main:
-    ; print_cstr(envp[0])
-    mov rsi, qword [envp]
-    mov rsi, qword [rsi+6*8]
+    ; let (xdg_runtime_dir := rsi) = get_env("XDG_RUNTIME_DIR", "XDG_RUNTIME_DIR".len)
+    mov rdi, xdg_runtime_dir_template
+    mov rdx, xdg_runtime_dir_template.len
+    call get_env
+
+    ; print_cstr(xdg_runtime_dir)
     call print_cstr
+
+    ; newline()
+    PUTCHAR LF
 
     ; return EXIT_SUCCESS
     xor rax, rax
     ret
 
+; #[fastcall(rbx, rcx, ax, rdx)]
+; pub unsafe fn get_env((name: rdi): *const u8, (name_len := rdx): usize) -> *const u8 := rsi
+global get_env
+get_env:
+    ; let (i := rbx) = 0
+    xor rbx, rbx
+
+    ; for (envp[i] := rsi) != null, i += 1 {
+    sub rbx, 1 ; overflow rbx i bit
+    .while:
+    inc rbx
+    mov rsi, qword [envp]
+    mov rsi, qword [rsi+8*rbx]
+    test rsi, rsi
+    jz .end_while
+
+        ; let (match_len := rcx) = cstr_match_length(envp[i], name)
+        call cstr_match_length
+
+        ; if match_len != name_len { continue }
+        cmp rcx, rdx
+        jne .while
+
+        ; return envp[i][match_len + 1..]
+        lea rsi, [rsi+rcx+1]
+        ret
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ; return null
+    xor rsi, rsi
+    ret
+
+; # Safety
+;
+; - both `source` and `template` should be non-null
+;
+; #[fastcall(rcx, ax)]
+; unsafe fn cstr_match_length(
+;     (source := rsi): *const u8,
+;     (template := rdi): *const u8,
+; ) -> usize := rcx
+cstr_match_length:
+    ; let (i := rcx) = 0
+    xor rcx, rcx
+
+    ; while source[i] != '\0' && template[i] != '\0' && source[i] == template[i] {
+    .while:
+    mov ah, byte [rsi+rcx]
+    mov al, byte [rdi+rcx]
+    test ah, ah
+    jz .end_while
+    test al, al
+    jz .end_while
+    cmp ah, al
+    jne .end_while
+
+        ; i += 1
+        inc rcx
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ret
+
+; # Safety
+;
+; - `ptr` should be non-null
+;
 ; #[fastcall(al, rdx)]
-; fn cstr_len((ptr := rsi): *const u8) -> usize := rdx
+; unsafe fn cstr_len((ptr := rsi): *const u8) -> usize := rdx
 cstr_len:
     ; let (result := rdx) = 0
     xor rdx, rdx
@@ -103,7 +196,11 @@ cstr_len:
 
     ret
 
-; #[fastcall(rdx, rax, rdi)]
+; # Safety
+;
+; - `ptr` should be non-null
+;
+; #[fastcall(all)]
 ; fn print_cstr((ptr := rsi): *const u8)
 print_cstr:
     ; let (len := rdx) = cstr_len(ptr)
