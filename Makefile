@@ -17,7 +17,7 @@ $(BUILD)/main.o: $(SRC)/main.asm
 	@$(NASM) $(NASM_FLAGS) $(SRC)/main.asm -o $(BUILD)/main.o
 
 $(BUILD)/minecraft: $(BUILD)/main.o
-	@echo "Linking minecraft"
+	@printf "Linking %s\n" $(EXEC_NAME)
 	@$(LD) $(LD_FLAGS) $(BUILD)/main.o -o $(BUILD)/minecraft
 
 clean:
