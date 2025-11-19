@@ -1,16 +1,11 @@
-section .rodata
-    SYSCALL_WRITE                equ 1
-    SYSCALL_CLOSE                equ 3
-    SYSCALL_SOCKET               equ 41
-    SYSCALL_CONNECT              equ 42
-    SYSCALL_EXIT                 equ 60
+%include "syscall.inc.asm"
+%include "error.inc.asm"
+%include "memory.inc.asm"
 
+section .rodata
     AF_UNIX                      equ 1
     SOCK_STREAM                  equ 1
     SOCK_CLOEXEC                 equ 0x80000
-
-    EXIT_SUCCESS                 equ 0
-    EXIT_FAILURE                 equ 1
 
     STDOUT                       equ 1
 
@@ -132,6 +127,17 @@ exit_on_error:
 ; pub fn main() -> i64
 global main
 main:
+    ; let (ptr := rax) = alloc(42)
+    mov rsi, 42
+    call alloc
+
+    ; *ptr.cast::<i32>() = -42
+    mov dword [rax], -42
+    
+    ; dealloc(ptr)
+    mov rdi, rax
+    call dealloc
+
     ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
     mov rax, SYSCALL_SOCKET
     mov rdi, AF_UNIX

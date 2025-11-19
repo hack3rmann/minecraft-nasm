@@ -1,5 +1,5 @@
-BUILD = build
-SRC = src
+BUILD = $(shell pwd)/build
+SRC = $(shell pwd)/src
 EXEC_NAME = minecraft
 
 NASM = nasm
@@ -16,17 +16,25 @@ run: all
 	@echo -e "     $(GREEN)Running$(NC) $(EXEC_NAME)" 
 	@$(BUILD)/minecraft
 
-$(BUILD):
-	@mkdir -p $(BUILD)
-
 $(BUILD)/main.o: $(SRC)/main.asm
 	@echo -e "   $(GREEN)Compiling$(NC) main.asm"
-	@$(NASM) $(NASM_FLAGS) $(SRC)/main.asm -o $(BUILD)/main.o
+	@mkdir -p $(BUILD)
+	@(cd $(SRC) && $(NASM) $(NASM_FLAGS) $(SRC)/main.asm -o $(BUILD)/main.o)
 
-$(BUILD)/minecraft: $(BUILD)/main.o
+$(BUILD)/memory/alloc.o: $(SRC)/memory/alloc.asm
+	@echo -e "   $(GREEN)Compiling$(NC) memory/alloc.asm"
+	@mkdir -p $(BUILD)/memory
+	@(cd $(SRC)/memory && $(NASM) $(NASM_FLAGS) $(SRC)/memory/alloc.asm -o $(BUILD)/memory/alloc.o)
+
+$(BUILD)/error/abort.o: $(SRC)/error/abort.asm
+	@echo -e "   $(GREEN)Compiling$(NC) error/abort.asm"
+	@mkdir -p $(BUILD)/error
+	@(cd $(SRC)/error && $(NASM) $(NASM_FLAGS) $(SRC)/error/abort.asm -o $(BUILD)/error/abort.o)
+
+$(BUILD)/minecraft: $(BUILD)/main.o $(BUILD)/memory/alloc.o $(BUILD)/error/abort.o
 	@echo -e "     $(GREEN)Linking$(NC) $(EXEC_NAME)" 
-	@$(LD) $(LD_FLAGS) $(BUILD)/main.o -o $(BUILD)/minecraft
+	@$(LD) $(LD_FLAGS) $(BUILD)/main.o $(BUILD)/memory/alloc.o $(BUILD)/error/abort.o -o $(BUILD)/minecraft
 
 clean:
-	@echo "Cleaning up"
+	@echo -e "    $(GREEN)Cleaning$(NC) $(BUILD)"
 	@rm -rf $(BUILD)
