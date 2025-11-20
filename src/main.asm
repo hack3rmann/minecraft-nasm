@@ -136,9 +136,15 @@ main:
         je handle_display_error
 
         ; // Got wl_registry.global
-        ; if event_id == (wire_id.wl_registry << 16) | wire_event.registry_global_opcode
+        ; if event_id == (wire_id.wl_registry << 16) | wire_event.registry_global_opcode {
         cmp rdi, (wire_id.wl_registry << 16) | wire_event.registry_global_opcode
-        call handle_registry_global
+        jne .end_if
+
+            ; handle_registry_global()
+            call handle_registry_global
+
+        ; }
+        .end_if:
 
         ; // Got wl_callback.done
         ; if event_id == (wire_id.wl_callback << 16) | wire_event.callback_done_opcode
