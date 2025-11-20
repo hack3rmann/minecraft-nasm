@@ -8,8 +8,6 @@ section .rodata
     SOCK_STREAM                  equ 1
     SOCK_CLOEXEC                 equ 0x80000
 
-    abort_error                  db "The process has been aborted", LF, 0
-    abort_error.len              equ $-abort_error
     cstring                      db "This is a C-string!!!", LF, 0
 
     xdg_runtime_dir_template     db "XDG_RUNTIME_DIR", 0
@@ -150,29 +148,6 @@ main:
 
     ; return EXIT_SUCCESS
     xor rax, rax
-    ret
-
-; fn exit_on_error((code := rax): usize)
-exit_on_error:
-    ; if code != 0 {
-    cmp rax, 0
-    jge .end_if
-
-        ; write(STDOUT, abort_error, abort_error.len)
-        mov rax, SYSCALL_WRITE
-        mov rdi, STDOUT
-        mov rsi, abort_error
-        mov rdx, abort_error.len
-        syscall
-
-        ; exit(EXIT_FAILURE)
-        mov rax, SYSCALL_EXIT
-        mov rdi, EXIT_FAILURE
-        syscall
-
-    ; }
-    .end_if:
-
     ret
 
 ; #[fastcall(rbx, rcx, ax)]

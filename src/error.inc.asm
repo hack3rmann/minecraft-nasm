@@ -4,6 +4,6 @@
 EXIT_SUCCESS                 equ 0
 EXIT_FAILURE                 equ 1
 
-extern abort
+extern abort, exit_on_error
 
 %endif ; !_ERROR_INC

@@ -26,7 +26,7 @@ $(BUILD)/memory/alloc.o: $(SRC)/memory/alloc.asm $(SRC)/memory.inc.asm $(SRC)/sy
 	@mkdir -p $(BUILD)/memory
 	@(cd $(SRC)/memory && $(NASM) $(NASM_FLAGS) $(SRC)/memory/alloc.asm -o $(BUILD)/memory/alloc.o)
 
-$(BUILD)/error/abort.o: $(SRC)/error/abort.asm $(SRC)/syscall.inc.asm $(SRC)/error.inc.asm
+$(BUILD)/error/abort.o: $(SRC)/error/abort.asm $(SRC)/syscall.inc.asm $(SRC)/error.inc.asm $(SRC)/debug.inc.asm
 	@echo -e "   $(GREEN)Compiling$(NC) error/abort.asm"
 	@mkdir -p $(BUILD)/error
 	@(cd $(SRC)/error && $(NASM) $(NASM_FLAGS) $(SRC)/error/abort.asm -o $(BUILD)/error/abort.o)
