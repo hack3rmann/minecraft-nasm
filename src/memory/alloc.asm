@@ -4,9 +4,12 @@
 
 section .text
 
-; #[fastcall(rax, rcx, r11, rdi, rdx, r10, r8, r9)]
-; unsafe fn alloc((size := rsi): usize) -> *mut () := rax
+; #[systemv]
+; unsafe fn alloc((size := rdi): usize) -> *mut () := rax
 alloc:
+    ; let (size := rsi) = size
+    mov rsi, rdi
+
     ; // meta info
     ; rsi += 16
     add rsi, 16
@@ -43,7 +46,7 @@ alloc:
     .exit:
     ret
 
-; #[fastcall(rax, rcx, r11, rdi, rsi)]
+; #[systemv]
 ; unsafe fn dealloc((ptr := rdi): *mut ())
 dealloc:
     ; ptr -= 16

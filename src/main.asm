@@ -30,6 +30,8 @@ section .bss
     envp resq 1
     ; static display_fd: usize
     display_fd resq 1
+    ; static stack_align: usize
+    stack_align resq 1
 
 section .text
 
@@ -89,43 +91,31 @@ start:
     lea rax, [8*rax+16+rsp]
     mov qword [envp], rax
 
+    ; let stack_align = rsp % 16
+    mov rax, rsp
+    and rax, 0xF
+    mov qword [stack_align], rax
+
+    ; align(16) stack before `main()`
+    sub rsp, rax
+
     ; let (exit_code := rax) = main()
     call main
+
+    ; unalign the stack
+    add rsp, qword [stack_align]
 
     ; exit(exit_code)
     mov rdi, rax
     mov rax, SYSCALL_EXIT
     syscall
 
-; fn exit_on_error((code := rax): usize)
-exit_on_error:
-    ; if code != 0 {
-    cmp rax, 0
-    jge .end_if
-
-        ; write(STDOUT, abort_error, abort_error.len)
-        mov rax, SYSCALL_WRITE
-        mov rdi, STDOUT
-        mov rsi, abort_error
-        mov rdx, abort_error.len
-        syscall
-
-        ; exit(EXIT_FAILURE)
-        mov rax, SYSCALL_EXIT
-        mov rdi, EXIT_FAILURE
-        syscall
-
-    ; }
-    .end_if:
-
-    ret
-
-; #[fastcall(all)]
+; #[systemv]
 ; pub fn main() -> i64
 global main
 main:
     ; let (ptr := rax) = alloc(42)
-    mov rsi, 42
+    mov rdi, 42
     call alloc
 
     ; *ptr.cast::<i32>() = -42
@@ -160,6 +150,29 @@ main:
 
     ; return EXIT_SUCCESS
     xor rax, rax
+    ret
+
+; fn exit_on_error((code := rax): usize)
+exit_on_error:
+    ; if code != 0 {
+    cmp rax, 0
+    jge .end_if
+
+        ; write(STDOUT, abort_error, abort_error.len)
+        mov rax, SYSCALL_WRITE
+        mov rdi, STDOUT
+        mov rsi, abort_error
+        mov rdx, abort_error.len
+        syscall
+
+        ; exit(EXIT_FAILURE)
+        mov rax, SYSCALL_EXIT
+        mov rdi, EXIT_FAILURE
+        syscall
+
+    ; }
+    .end_if:
+
     ret
 
 ; #[fastcall(rbx, rcx, ax)]
