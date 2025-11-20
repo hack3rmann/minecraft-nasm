@@ -1,6 +1,6 @@
-%include "../syscall.inc.asm"
-%include "../error.inc.asm"
-%include "../debug.inc.asm"
+%include "../syscall.s"
+%include "../error.s"
+%include "../debug.s"
 
 section .rodata
     abort_error                   db "The process has been aborted", LF

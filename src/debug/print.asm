@@ -1,6 +1,6 @@
-%include "../debug.inc.asm"
-%include "../memory.inc.asm"
-%include "../syscall.inc.asm"
+%include "../debug.s"
+%include "../memory.s"
+%include "../syscall.s"
 
 ; fn print_uint_hex((value := rdi): usize)
 print_uint_hex:

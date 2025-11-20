@@ -1,9 +1,9 @@
-%include "syscall.inc.asm"
-%include "error.inc.asm"
-%include "memory.inc.asm"
-%include "debug.inc.asm"
-%include "string.inc.asm"
-%include "env.inc.asm"
+%include "syscall.s"
+%include "error.s"
+%include "memory.s"
+%include "debug.s"
+%include "string.s"
+%include "env.s"
 
 section .rodata
     addr:

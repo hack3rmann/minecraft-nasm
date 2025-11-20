@@ -1,5 +1,5 @@
-%include "../env.inc.asm"
-%include "../string.inc.asm"
+%include "../env.s"
+%include "../string.s"
 
 extern envp
 

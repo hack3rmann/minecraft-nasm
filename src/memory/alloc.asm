@@ -1,6 +1,6 @@
-%include "../memory.inc.asm"
-%include "../syscall.inc.asm"
-%include "../error.inc.asm"
+%include "../memory.s"
+%include "../syscall.s"
+%include "../error.s"
 
 section .text
 

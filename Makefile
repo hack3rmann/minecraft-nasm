@@ -10,7 +10,7 @@ LD_FLAGS =
 GREEN = \033[0;32m
 NC = \033[0m
 
-ASM_SRCS = $(shell find $(SRC) -name '*.asm' ! -name '*.inc.asm')
+ASM_SRCS = $(shell find $(SRC) -name '*.asm')
 OBJS = $(patsubst $(SRC)/%.asm,$(BUILD)/%.o,$(ASM_SRCS))
 
 .PHONY: all

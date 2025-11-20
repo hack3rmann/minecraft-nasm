@@ -1,6 +1,6 @@
-%include "../string.inc.asm"
-%include "../syscall.inc.asm"
-%include "../debug.inc.asm"
+%include "../string.s"
+%include "../syscall.s"
+%include "../debug.s"
 
 section .text
 
