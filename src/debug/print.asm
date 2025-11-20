@@ -2,6 +2,8 @@
 %include "../memory.s"
 %include "../syscall.s"
 
+section .text
+
 ; fn print_uint_hex((value := rdi): usize)
 print_uint_hex:
     push rbp

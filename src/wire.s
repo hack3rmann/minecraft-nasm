@@ -1,16 +1,16 @@
 section .bss
-
     wire_id:
-        .wl_display                   equ 1
-        .wl_registry                  equ 2
-        .wl_callback                  equ 3
+        .wl_display                       equ 1
+        .wl_registry                      equ 2
+        .wl_callback                      equ 3
 
     wire_request:
-        .display_sync_opcode          equ 0
-        .display_get_registry_opcode  equ 1
+        .display_sync_opcode              equ 0
+        .display_get_registry_opcode      equ 1
 
     wire_event:
-        .callback_done_opcode         equ 0
+        .display_error_opcode             equ 0
+        .callback_done_opcode             equ 0
 
 struc WireMessage
     ; object_id: u32

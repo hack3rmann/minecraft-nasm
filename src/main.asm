@@ -12,6 +12,21 @@ section .rodata
         .sun_path                db "/run/user/1000/wayland-1"
     addr_len                     equ $-addr
 
+    display_error_string         db "wayland error: "
+    display_error_string.len     equ $-display_error_string
+
+struc DisplayError
+    .object_id      resd 1
+    .code           resd 1
+    .message.len    resd 1
+    .message        resb 0
+    .sizeof         equ $-.object_id
+endstruc
+
+; <arg name="object_id" type="object" summary="object where the error occurred"/>
+; <arg name="code" type="uint" summary="error code"/>
+; <arg name="message" type="string" summary="error description"/>
+
 section .bss
     ; pub static argc: usize
     global argc
@@ -87,28 +102,25 @@ main:
 
     ; loop {
     .loop:
-    jmp .end_loop
         ; read_event()
         call read_event
 
         ; let (object_id := rdi) = message.object_id
         xor rdi, rdi
         mov edi, dword [message + WireMessage.object_id]
-        DEBUG_HEX rdi
 
         ; let (opcode := rsi) = message.opcode
         movzx rsi, word [message + WireMessage.opcode]
 
-        ; if object_id == wire_id.wl_callback
-        ;     && opcode == wire_event.callback_done_opcode
-        ; { break }
-        xor rax, rax
-        cmp rdi, wire_id.wl_callback
-        sete ah
-        cmp rsi, wire_event.callback_done_opcode
-        sete al
-        test al, ah
-        jnz .end_loop
+        ; let (event_id := rdi) = (object_id << 16) | opcode
+        shl rdi, 16
+        or rdi, rsi
+
+        ; // Got wl_display.error
+        ; if event_id == (wire_id.wl_display << 16) | wire_event.display_error_opcode
+        ; { handle_display_error() }
+        cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
+        je handle_display_error
 
     ; }
     jmp .loop
@@ -123,6 +135,41 @@ main:
     ; return EXIT_SUCCESS
     xor rax, rax
     ret
+
+; #[jumpable]
+; #[noreturn]
+; fn handle_display_error()
+handle_display_error:
+    ; write(STDOUT, display_error_string, display_error_string.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, display_error_string
+    mov rdx, display_error_string.len
+    syscall
+
+    ; let (error_message := rsi) = message.body.message
+    mov rsi, message + WireMessage.body + DisplayError.message
+
+    ; let (error_message_len := rdx) = message.body.message.len
+    xor rdx, rdx
+    mov edx, dword [message + WireMessage.body + DisplayError.message.len]
+
+    ; write(STDOUT, error_message, error_message_len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    ; mov rsi, rsi
+    ; mov rdx, rdx
+    syscall
+
+    ; write(STDOUT, &newline, 1)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, newline
+    mov rdx, 1
+    syscall
+
+    ; abort()
+    jmp abort
 
 ; #[systemv]
 ; fn read_event()
@@ -172,8 +219,8 @@ send_sync:
     .message_size equ WireMessage.HEADER_SIZE + 4
     mov word [message + WireMessage.size], .message_size
 
-    ; message.body.id = wire_id.wl_registry
-    mov dword [message + WireMessage.body + 0], wire_id.wl_registry
+    ; message.body.id = wire_id.wl_callback
+    mov dword [message + WireMessage.body + 0], wire_id.wl_callback
 
     ; last_id = wire_id.wl_callback
     mov dword [last_id], wire_id.wl_callback
