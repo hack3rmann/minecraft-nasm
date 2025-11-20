@@ -2,29 +2,29 @@
 %include "../error.s"
 %include "../debug.s"
 
-section .rodata
-    abort_error                   db "The process has been aborted", LF
-    abort_error.len               equ $-abort_error
-
 section .text
 
 ; #[noreturn]
 ; #[jumpable]
 ; fn abort() -> !
 abort:
-    ; write(STDOUT, abort_error, abort_error.len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, abort_error
-    mov rdx, abort_error.len
+    ; let (pid := rax) = getpid()
+    mov rax, SYSCALL_GETPID
     syscall
 
+    ; kill(pid, SIGABRT)
+    mov rdi, rax
+    mov rax, SYSCALL_KILL
+    mov rsi, SIGABRT
+    syscall
+
+    ; // do exit in case if SIGABRT have been handled
     ; exit(EXIT_FAILURE)
     mov rax, SYSCALL_EXIT
     mov rdi, EXIT_FAILURE
     syscall
 
-    ; do return just in case
+    ; // do return just in case
     ret
 
 ; #[fastcall]
