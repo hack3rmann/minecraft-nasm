@@ -1,15 +1,12 @@
 %include "syscall.inc.asm"
 %include "error.inc.asm"
 %include "memory.inc.asm"
+%include "debug.inc.asm"
 
 section .rodata
     AF_UNIX                      equ 1
     SOCK_STREAM                  equ 1
     SOCK_CLOEXEC                 equ 0x80000
-
-    STDOUT                       equ 1
-
-    LF                           equ 10
 
     abort_error                  db "The process has been aborted", LF, 0
     abort_error.len              equ $-abort_error
@@ -127,16 +124,23 @@ exit_on_error:
 ; pub fn main() -> i64
 global main
 main:
-    ; let (ptr := rax) = alloc(42)
-    mov rsi, 42
-    call alloc
+    DEBUG_HEX rsp
+    DEBUG_HEX rsp
+    DEBUG_HEX rsp
+    DEBUG_HEX rsp
 
-    ; *ptr.cast::<i32>() = -42
-    mov dword [rax], -42
-    
-    ; dealloc(ptr)
-    mov rdi, rax
-    call dealloc
+    jmp .error_end
+        ; let (ptr := rax) = alloc(42)
+        mov rsi, 42
+        call alloc
+
+        ; *ptr.cast::<i32>() = -42
+        mov dword [rax], -42
+        
+        ; dealloc(ptr)
+        mov rdi, rax
+        call dealloc
+    .error_end:
 
     ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
     mov rax, SYSCALL_SOCKET

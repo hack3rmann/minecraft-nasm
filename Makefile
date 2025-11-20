@@ -31,9 +31,18 @@ $(BUILD)/error/abort.o: $(SRC)/error/abort.asm
 	@mkdir -p $(BUILD)/error
 	@(cd $(SRC)/error && $(NASM) $(NASM_FLAGS) $(SRC)/error/abort.asm -o $(BUILD)/error/abort.o)
 
-$(BUILD)/minecraft: $(BUILD)/main.o $(BUILD)/memory/alloc.o $(BUILD)/error/abort.o
+$(BUILD)/debug/print.o: $(SRC)/debug/print.asm
+	@echo -e "   $(GREEN)Compiling$(NC) debug/print.asm"
+	@mkdir -p $(BUILD)/debug
+	@(cd $(SRC)/debug && $(NASM) $(NASM_FLAGS) $(SRC)/debug/print.asm -o $(BUILD)/debug/print.o)
+
+$(BUILD)/minecraft: $(BUILD)/main.o $(BUILD)/memory/alloc.o $(BUILD)/error/abort.o $(BUILD)/debug/print.o
 	@echo -e "     $(GREEN)Linking$(NC) $(EXEC_NAME)" 
-	@$(LD) $(LD_FLAGS) $(BUILD)/main.o $(BUILD)/memory/alloc.o $(BUILD)/error/abort.o -o $(BUILD)/minecraft
+	@$(LD) $(LD_FLAGS) $(BUILD)/main.o \
+								     $(BUILD)/memory/alloc.o \
+										 $(BUILD)/error/abort.o \
+										 $(BUILD)/debug/print.o \
+										 -o $(BUILD)/minecraft
 
 clean:
 	@echo -e "    $(GREEN)Cleaning$(NC) $(BUILD)"

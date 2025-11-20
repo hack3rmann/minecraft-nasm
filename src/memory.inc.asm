@@ -20,6 +20,8 @@ MAP_STACK       equ 0x020000
 MAP_SYNC        equ 0x080000
 MAP_FAILED      equ 0xFFFFFFFFFFFFFFFF
 
+%define ALIGNED(n_bytes) (n_bytes + (8 - (n_bytes % 8)) % 8)
+
 extern alloc, dealloc
 
 %endif ; !_MEMORY_INC
