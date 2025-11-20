@@ -5,20 +5,24 @@
 section .text
 
 ; #[fastcall(rax, rcx, r11, rdi, rdx, r10, r8, r9)]
-; unsafe fn alloc((size := rsi): usize) -> *mut (): rax
+; unsafe fn alloc((size := rsi): usize) -> *mut () := rax
 alloc:
+    ; // meta info
+    ; rsi += 16
+    add rsi, 16
+
     ; let (result := rax): *mut () = mmap(
     ;     addr = null,
     ;     length = size,
-    ;     prot = PROT_NONE,
-    ;     flags = MAP_ANONYMOUS,
+    ;     prot = PROT_READ | PROT_WRITE,
+    ;     flags = MAP_ANONYMOUS | MAP_PRIVATE,
     ;     fd = -1,
     ;     offset = 0)
     mov rax, SYSCALL_MMAP
     xor rdi, rdi
     ; mov rsi, rsi
-    mov rdx, PROT_NONE
-    mov r10, MAP_ANONYMOUS
+    mov rdx, PROT_READ | PROT_WRITE
+    mov r10, MAP_ANONYMOUS | MAP_PRIVATE
     mov r8, -1
     xor r9, r9
     syscall
@@ -56,7 +60,7 @@ dealloc:
 
     ; if result != 0 { abort() }
     test rax, rax
-    jnz .exit
+    jz .exit
     call abort
 
     .exit:

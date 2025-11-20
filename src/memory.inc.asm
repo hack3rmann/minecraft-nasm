@@ -20,6 +20,11 @@ MAP_STACK       equ 0x020000
 MAP_SYNC        equ 0x080000
 MAP_FAILED      equ 0xFFFFFFFFFFFFFFFF
 
+MAP_FILE        equ 0x0000
+MAP_SHARED      equ 0x0001
+MAP_PRIVATE     equ 0x0002
+MAP_FIXED       equ 0x0010
+
 %define ALIGNED(n_bytes) (n_bytes + (8 - (n_bytes % 8)) % 8)
 
 extern alloc, dealloc

@@ -17,8 +17,7 @@ print_uint_hex:
     push 0
 
     ; digits[..2] = b"0x"
-    mov byte [rbp+.digits+0], "0"
-    mov byte [rbp+.digits+1], "x"
+    mov word [rbp+.digits], "0x"
 
     ; digits[-1] = b'\n'
     mov byte [rbp+.digits+2+.n_digits], LF

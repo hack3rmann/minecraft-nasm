@@ -15,7 +15,7 @@
     ; in case we are about to print `rsp`
     add rsp, 8*9
     mov rdi, %1
-    sup rsp, 8*9
+    sub rsp, 8*9
 
     call print_uint_hex
 

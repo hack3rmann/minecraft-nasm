@@ -124,23 +124,16 @@ exit_on_error:
 ; pub fn main() -> i64
 global main
 main:
-    DEBUG_HEX rsp
-    DEBUG_HEX rsp
-    DEBUG_HEX rsp
-    DEBUG_HEX rsp
+    ; let (ptr := rax) = alloc(42)
+    mov rsi, 42
+    call alloc
 
-    jmp .error_end
-        ; let (ptr := rax) = alloc(42)
-        mov rsi, 42
-        call alloc
-
-        ; *ptr.cast::<i32>() = -42
-        mov dword [rax], -42
-        
-        ; dealloc(ptr)
-        mov rdi, rax
-        call dealloc
-    .error_end:
+    ; *ptr.cast::<i32>() = -42
+    mov dword [rax], -42
+    
+    ; dealloc(ptr)
+    mov rdi, rax
+    call dealloc
 
     ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
     mov rax, SYSCALL_SOCKET
