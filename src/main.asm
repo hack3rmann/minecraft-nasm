@@ -118,6 +118,9 @@ main:
         ; read_event()
         call read_event
 
+        ; let (event_size := rdi) = message.size
+        movzx rdi, word [message + WireMessage.size]
+
         ; let (object_id := rdi) = message.object_id
         xor rdi, rdi
         mov edi, dword [message + WireMessage.object_id]
@@ -191,10 +194,14 @@ handle_registry_global:
     ; let (interface := rsi) = &message.body.interface
     mov rsi, message + WireMessage.body + RegistryGlobal.interface
 
-    ; let (interface_len := rdx, r8) = message.body.interface.len
-    xor rdx, rdx
-    mov edx, dword [message + WireMessage.body + RegistryGlobal.interface.len]
-    mov r8, rdx
+    ; let (interface_size := r8) = message.body.interface.len
+    xor rax, rax
+    mov eax, dword [message + WireMessage.body + RegistryGlobal.interface.len]
+    mov r8, rax
+
+    ; // remove null terminator
+    ; let (interface_len := rdi) = interface_size - 1
+    lea rdx, [r8 - 1]
 
     ; write(STDOUT, interface, interface_len)
     mov rax, SYSCALL_WRITE
@@ -210,13 +217,12 @@ handle_registry_global:
     mov rdx, global_string3.len
     syscall
 
-    ; let (string_block_size := r8) = (interface_len + 4) / 4
+    ; let (string_block_size := r8) = (interface_len + 3) / 4
+    add r8, 3
     shr r8, 2
-    add r8, 1
 
     ; let (version := rdi) = message.body.version
     xor rdi, rdi
-    ; FIXME(hack3rmann): wrong offset
     mov edi, dword [message + WireMessage.body + RegistryGlobal.sizeof + 4*r8]
     call print_uint
 
