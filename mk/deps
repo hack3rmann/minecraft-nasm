@@ -2,15 +2,12 @@
 
 set -e
 
-SRC=$1
-FILE_LOCAL=$2
+FILE=$1
 
-file="$SRC/$FILE_LOCAL"
+# replace `/` with `\/` for `sed`
+dir_escaped=$(dirname $FILE | sed 's/\//\\\//g')
 
-# replace '/' with '\/'
-dir_escaped=$(dirname $file | sed 's/\//\\\//g')
-
-cat $file \
+cat $FILE \
     | grep '^%include' \
     | sed "s/%include \"\\(.*\\)\"/$dir_escaped\/\\1/g" \
     | tr '\n' ' '
