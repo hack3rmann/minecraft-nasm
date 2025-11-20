@@ -2,29 +2,24 @@
 %include "error.inc.asm"
 %include "memory.inc.asm"
 %include "debug.inc.asm"
+%include "string.inc.asm"
+%include "env.inc.asm"
 
 section .rodata
-    AF_UNIX                      equ 1
-    SOCK_STREAM                  equ 1
-    SOCK_CLOEXEC                 equ 0x80000
-
-    cstring                      db "This is a C-string!!!", LF, 0
-
-    xdg_runtime_dir_template     db "XDG_RUNTIME_DIR", 0
-    xdg_runtime_dir_template.len equ $-xdg_runtime_dir_template-1
-    wayland_socket_path          db "/run/user/1000/wayland-1", 0
-
     addr:
         .sun_family              dw AF_UNIX
         .sun_path                db "/run/user/1000/wayland-1"
     addr_len                     equ $-addr
 
 section .bss
-    ; static argc: usize
+    ; pub static argc: usize
+    global argc
     argc resq 1
-    ; static argv: *const *const u8
+    ; pub static argv: *const *const u8
+    global argv
     argv resq 1
-    ; static envp: *const *const u8
+    ; pub static envp: *const *const u8
+    global envp
     envp resq 1
     ; static display_fd: usize
     display_fd resq 1
@@ -33,23 +28,35 @@ section .bss
 
 section .text
 
-%macro PUTCHAR 1
-    push %1
-
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, rsp
-    mov rdx, 1
+; #[systemv]
+; fn main() -> i64
+main:
+    ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
+    mov rax, SYSCALL_SOCKET
+    mov rdi, AF_UNIX
+    mov rsi, SOCK_STREAM | SOCK_CLOEXEC
+    xor rdx, rdx
     syscall
+    call exit_on_error
+    mov qword [display_fd], rax
 
-    pop rax
-%endmacro
+    ; connect(display_fd, &const addr, addr_len)
+    mov rax, SYSCALL_CONNECT
+    mov rdi, qword [display_fd]
+    mov rsi, addr
+    mov rdx, addr_len
+    syscall
+    call exit_on_error
 
-struc sockaddr_un
-    .sun_family resw 1
-    .sun_path   resb 126
-    .sizeof     equ $-.sun_family
-endstruc
+    ; close(fd)
+    mov rax, SYSCALL_CLOSE
+    mov rdi, qword [display_fd]
+    syscall
+    call exit_on_error
+
+    ; return EXIT_SUCCESS
+    xor rax, rax
+    ret
 
 ; #[nocall]
 ; #[noreturn]
@@ -107,148 +114,3 @@ start:
     mov rdi, rax
     mov rax, SYSCALL_EXIT
     syscall
-
-; #[systemv]
-; pub fn main() -> i64
-global main
-main:
-    ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
-    mov rax, SYSCALL_SOCKET
-    mov rdi, AF_UNIX
-    mov rsi, SOCK_STREAM | SOCK_CLOEXEC
-    xor rdx, rdx
-    syscall
-    call exit_on_error
-    mov qword [display_fd], rax
-
-    ; connect(display_fd, &const addr, addr_len)
-    mov rax, SYSCALL_CONNECT
-    mov rdi, qword [display_fd]
-    mov rsi, addr
-    mov rdx, addr_len
-    syscall
-    call exit_on_error
-
-    ; close(fd)
-    mov rax, SYSCALL_CLOSE
-    mov rdi, qword [display_fd]
-    syscall
-    call exit_on_error
-
-    ; return EXIT_SUCCESS
-    xor rax, rax
-    ret
-
-; #[fastcall(rbx, rcx, ax)]
-; pub unsafe fn get_env((name: rdi): *const u8, (name_len := rdx): usize) -> *const u8 := rsi
-global get_env
-get_env:
-    ; let (i := rbx) = 0
-    xor rbx, rbx
-
-    ; for (envp[i] := rsi) != null {
-    .while:
-    mov rsi, qword [envp]
-    mov rsi, qword [rsi+8*rbx]
-    test rsi, rsi
-    jz .end_while
-
-        ; let (match_len := rcx) = cstr_match_length(envp[i] := rsi, name := rdi)
-        call cstr_match_length
-
-        ; if match_len == name_len {
-        cmp rcx, rdx
-        jne .end_if
-
-            ; return envp[i][match_len + 1..]
-            lea rsi, [rsi+rcx+1]
-            ret
-
-        ; }
-        .end_if:
-
-        ; i += 1
-        inc rbx
-
-    ; }
-    jmp .while
-    .end_while:
-
-    ; return null
-    xor rsi, rsi
-    ret
-
-; # Safety
-;
-; - both `source` and `template` should be non-null
-;
-; #[fastcall(rcx, ax)]
-; unsafe fn cstr_match_length(
-;     (source := rsi): *const u8,
-;     (template := rdi): *const u8,
-; ) -> usize := rcx
-cstr_match_length:
-    ; let (i := rcx) = 0
-    xor rcx, rcx
-
-    ; while source[i] != '\0' && template[i] != '\0' && source[i] == template[i] {
-    .while:
-    mov ah, byte [rsi+rcx]
-    mov al, byte [rdi+rcx]
-    test ah, ah
-    jz .end_while
-    test al, al
-    jz .end_while
-    cmp ah, al
-    jne .end_while
-
-        ; i += 1
-        inc rcx
-
-    ; }
-    jmp .while
-    .end_while:
-
-    ret
-
-; # Safety
-;
-; - `ptr` should be non-null
-;
-; #[fastcall(al, rdx)]
-; unsafe fn cstr_len((ptr := rsi): *const u8) -> usize := rdx
-cstr_len:
-    ; let (result := rdx) = 0
-    xor rdx, rdx
-
-    ; while *(ptr + result) != null {
-    .while:
-    mov al, byte [rsi+rdx]
-    test al, al
-    jz .end_while
-
-        ; result += 1
-        inc rdx
-
-    ; }
-    jmp .while
-    .end_while:
-
-    ret
-
-; # Safety
-;
-; - `ptr` should be non-null
-;
-; #[fastcall(all)]
-; fn print_cstr((ptr := rsi): *const u8)
-print_cstr:
-    ; let (len := rdx) = cstr_len(ptr)
-    call cstr_len
-
-    ; write(STDOUT, ptr, len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    syscall
-
-    ret

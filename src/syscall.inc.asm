@@ -9,4 +9,8 @@ SYSCALL_SOCKET               equ 41
 SYSCALL_CONNECT              equ 42
 SYSCALL_EXIT                 equ 60
 
+AF_UNIX                      equ 1
+SOCK_STREAM                  equ 1
+SOCK_CLOEXEC                 equ 0x80000
+
 %endif ; !_SYSCALL_INC
