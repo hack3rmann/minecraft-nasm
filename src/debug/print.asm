@@ -4,6 +4,72 @@
 
 section .text
 
+; #[systemv]
+; fn print_uint((value := rdi): usize)
+print_uint:
+    push rbp
+    mov rbp, rsp
+
+    .digits             equ -24
+    .n_digits           equ 24
+    .stack_size         equ ALIGNED(-.digits)
+
+    ; let digits: [u8; 24]
+    sub rsp, .stack_size
+
+    ; digits[-1] = b'0'
+    mov byte [rbp+.digits+.n_digits-1], "0"
+
+    ; let n_digits = 0
+    xor rcx, rcx
+
+    ; while value != 0 {
+    .while:
+    test rdi, rdi
+    jz .end_while
+
+        ; let ({ value / 10 } := rax, digit_value := rdx) = divmod(value, 10)
+        xor rdx, rdx
+        mov rax, rdi
+        mov r8, 10
+        div r8
+
+        ; value = value / 10
+        mov rdi, rax
+
+        ; let (digit := dl) = (digit_value + '0') as u8
+        add rdx, "0"
+
+        ; digits[digits.len - 1 - n_digits] = digit
+        mov r8, rcx
+        neg r8
+        mov byte [rbp + .digits + .n_digits - 1 + r8], dl
+
+        ; n_digits += 1
+        inc rcx
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ; if n_digits == 0 { n_digits = 1 }
+    test rcx, rcx
+    mov rax, 1
+    cmovz rcx, rax
+
+    ; write(STDOUT, &digits + digits.len - n_digits, n_digits)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    lea rsi, [rbp + .digits + .n_digits]
+    sub rsi, rcx
+    mov rdx, rcx
+    syscall
+
+    add rsp, .stack_size
+
+    pop rbp
+    ret
+
 ; fn print_uint_hex((value := rdi): usize)
 print_uint_hex:
     push rbp
@@ -24,15 +90,15 @@ print_uint_hex:
     ; digits[-1] = b'\n'
     mov byte [rbp+.digits+2+.n_digits], LF
 
-    ; let (value := r12) = value
-    mov r12, rdi
+    ; let (value := r8) = value
+    mov r8, rdi
 
     ; for i in n_digits - 1 + 2..=2 {
     %assign i .n_digits-1+2
     %rep .n_digits
 
         ; let (digit_value := rax) = value % 16
-        mov rax, r12
+        mov rax, r8
         and rax, 0xF
 
         ; let (char_difference := rdx) = if digit_value < 10 { '0' } else { 'A' - 10 }
@@ -48,7 +114,7 @@ print_uint_hex:
         mov byte [rbp+.digits+i], al
 
         ; value /= 16
-        shr r12, 4
+        shr r8, 4
 
     ; }
     %assign i i-1
@@ -65,4 +131,16 @@ print_uint_hex:
     add rsp, .stack_size
 
     pop rbp
+    ret
+
+; #[systemv]
+; fn print_newline()
+print_newline:
+    ; write(STDOUT, &newline, 1)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, newline
+    mov rdx, 1
+    syscall
+
     ret

@@ -170,6 +170,11 @@ handle_registry_global:
     mov rdx, global_string1.len
     syscall
 
+    ; let (name := rdi) = message.body.name
+    xor rdi, rdi
+    mov edi, dword [message + WireMessage.body + RegistryGlobal.name]
+    call print_uint
+
     ; write(STDOUT, global_string2, global_string2.len)
     mov rax, SYSCALL_WRITE
     mov rdi, STDOUT
@@ -180,9 +185,10 @@ handle_registry_global:
     ; let (interface := rsi) = &message.body.interface
     mov rsi, message + WireMessage.body + RegistryGlobal.interface
 
-    ; let (interface_len := rdx) = message.body.interface.len
+    ; let (interface_len := rdx, r8) = message.body.interface.len
     xor rdx, rdx
     mov edx, dword [message + WireMessage.body + RegistryGlobal.interface.len]
+    mov r8, rdx
 
     ; write(STDOUT, interface, interface_len)
     mov rax, SYSCALL_WRITE
@@ -197,6 +203,16 @@ handle_registry_global:
     mov rsi, global_string3
     mov rdx, global_string3.len
     syscall
+
+    ; let (string_block_size := r8) = (interface_len + 4) / 4
+    shr r8, 2
+    add r8, 1
+
+    ; let (version := rdi) = message.body.version
+    xor rdi, rdi
+    ; FIXME(hack3rmann): wrong offset
+    mov edi, dword [message + WireMessage.body + RegistryGlobal.sizeof + 4*r8]
+    call print_uint
 
     ; write(STDOUT, global_string4, global_string4.len)
     mov rax, SYSCALL_WRITE
