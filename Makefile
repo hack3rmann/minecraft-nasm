@@ -10,8 +10,10 @@ LD_FLAGS =
 GREEN = \033[0;32m
 NC = \033[0m
 
+.PHONY: all
 all: $(BUILD)/minecraft
 
+.PHONY: run
 run: all
 	@echo -e "     $(GREEN)Running$(NC) $(EXEC_NAME)" 
 	@$(BUILD)/minecraft
@@ -44,6 +46,7 @@ $(BUILD)/minecraft: $(BUILD)/main.o $(BUILD)/memory/alloc.o $(BUILD)/error/abort
 										 $(BUILD)/debug/print.o \
 										 -o $(BUILD)/minecraft
 
+.PHONY: clean
 clean:
 	@echo -e "    $(GREEN)Cleaning$(NC) $(BUILD)"
 	@rm -rf $(BUILD)
