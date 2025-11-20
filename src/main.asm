@@ -112,17 +112,6 @@ start:
 ; pub fn main() -> i64
 global main
 main:
-    ; let (ptr := rax) = alloc(42)
-    mov rdi, 42
-    call alloc
-
-    ; *ptr.cast::<i32>() = -42
-    mov dword [rax], -42
-    
-    ; dealloc(ptr)
-    mov rdi, rax
-    call dealloc
-
     ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
     mov rax, SYSCALL_SOCKET
     mov rdi, AF_UNIX
