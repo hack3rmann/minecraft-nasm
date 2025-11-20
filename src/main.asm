@@ -15,6 +15,15 @@ section .rodata
     display_error_string         db "wayland error: "
     display_error_string.len     equ $-display_error_string
 
+    global_string1               db "RegistryGlobal {", LF, "    name: "
+    global_string1.len           equ $-global_string1
+    global_string2               db ",", LF, "    interface: '"
+    global_string2.len           equ $-global_string2
+    global_string3               db "',", LF, "    version: "
+    global_string3.len           equ $-global_string3
+    global_string4               db ",", LF, "}", LF
+    global_string4.len           equ $-global_string4
+
 struc DisplayError
     .object_id      resd 1
     .code           resd 1
@@ -23,9 +32,13 @@ struc DisplayError
     .sizeof         equ $-.object_id
 endstruc
 
-; <arg name="object_id" type="object" summary="object where the error occurred"/>
-; <arg name="code" type="uint" summary="error code"/>
-; <arg name="message" type="string" summary="error description"/>
+struc RegistryGlobal
+    .name           resd 1
+    .interface.len  resd 1
+    .interface      resb 0
+    .version        resd 0
+    .sizeof         equ $-.name
+endstruc
 
 section .bss
     ; pub static argc: usize
@@ -122,6 +135,17 @@ main:
         cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
         je handle_display_error
 
+        ; // Got wl_registry.global
+        ; if event_id == (wire_id.wl_registry << 16) | wire_event.registry_global_opcode
+        cmp rdi, (wire_id.wl_registry << 16) | wire_event.registry_global_opcode
+        call handle_registry_global
+
+        ; // Got wl_callback.done
+        ; if event_id == (wire_id.wl_callback << 16) | wire_event.callback_done_opcode
+        ; { break }
+        cmp rdi, (wire_id.wl_callback << 16) | wire_event.callback_done_opcode
+        je .end_loop
+
     ; }
     jmp .loop
     .end_loop:
@@ -136,6 +160,53 @@ main:
     xor rax, rax
     ret
 
+; #[systemv]
+; fn handle_registry_global()
+handle_registry_global:
+    ; write(STDOUT, global_string1, global_string1.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, global_string1
+    mov rdx, global_string1.len
+    syscall
+
+    ; write(STDOUT, global_string2, global_string2.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, global_string2
+    mov rdx, global_string2.len
+    syscall
+
+    ; let (interface := rsi) = &message.body.interface
+    mov rsi, message + WireMessage.body + RegistryGlobal.interface
+
+    ; let (interface_len := rdx) = message.body.interface.len
+    xor rdx, rdx
+    mov edx, dword [message + WireMessage.body + RegistryGlobal.interface.len]
+
+    ; write(STDOUT, interface, interface_len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    ; mov rsi, rsi
+    ; mov rdx, rdx
+    syscall
+
+    ; write(STDOUT, global_string3, global_string3.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, global_string3
+    mov rdx, global_string3.len
+    syscall
+
+    ; write(STDOUT, global_string4, global_string4.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, global_string4
+    mov rdx, global_string4.len
+    syscall
+
+    ret
+
 ; #[jumpable]
 ; #[noreturn]
 ; fn handle_display_error()
@@ -147,7 +218,7 @@ handle_display_error:
     mov rdx, display_error_string.len
     syscall
 
-    ; let (error_message := rsi) = message.body.message
+    ; let (error_message := rsi) = &message.body.message
     mov rsi, message + WireMessage.body + DisplayError.message
 
     ; let (error_message_len := rdx) = message.body.message.len

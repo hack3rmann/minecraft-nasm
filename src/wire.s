@@ -11,6 +11,7 @@ section .bss
     wire_event:
         .display_error_opcode             equ 0
         .callback_done_opcode             equ 0
+        .registry_global_opcode           equ 0
 
 struc WireMessage
     ; object_id: u32
