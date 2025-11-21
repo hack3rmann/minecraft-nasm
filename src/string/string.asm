@@ -19,6 +19,33 @@ String_new:
     ret
 
 ; #[systemv]
+; fn String::with_capacity(($return := rdi): *mut Self, (capacity := rsi): usize) -> Self
+String_with_capacity:
+    push r12
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; $return->len = 0
+    mov qword [r12 + String.len], 0
+
+    ; capacity = max(16, capacity)
+    mov rax, 16
+    cmp rax, rsi
+    cmova rsi, rax
+
+    ; $return->cap = capacity
+    mov qword [r12 + String.len], rsi
+
+    ; $return->ptr = alloc(capacity)
+    mov rdi, rsi
+    call alloc
+    mov qword [r12 + String.ptr], rax
+
+    pop r12
+    ret
+
+; #[systemv]
 ; fn String::push_ascii(&mut self := rdi, (value := rsi): u8)
 String_push_ascii:
     push r12
@@ -157,18 +184,29 @@ String_push_str:
     pop r12
     ret
 
+; #[fastcall]
+; fn String::clear(&mut self := rdi)
+String_clear:
+    ; self.len = 0
+    mov qword [rdi + String.len], 0
+
+    ret
+
 ; #[systemv]
 ; fn String::drop(&mut self := rdi)
 String_drop:
-    ; let (self := r8) = self
-    mov r8, rdi
+    push r12
+
+    ; let (self := r12) = self
+    mov r12, rdi
 
     ; dealloc(self->ptr)
     mov rdi, qword [rdi + String.ptr]
     call dealloc
 
     ; *self = String::new()
-    mov rdi, r8
+    mov rdi, r12
     call String_new
 
+    pop r12
     ret

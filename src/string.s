@@ -10,7 +10,8 @@ struc String
     .sizeof equ $-.len
 endstruc
 
-extern String_new, String_drop, String_push_ascii, String_push_str
+extern String_new, String_drop, String_push_ascii, String_push_str, String_with_capacity, \
+       String_clear
 
 struc Str
     .len    resq 1
