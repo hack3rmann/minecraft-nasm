@@ -1,6 +1,7 @@
 %include "../memory.s"
 %include "../syscall.s"
 %include "../error.s"
+%include "../debug.s"
 
 section .text
 
@@ -49,6 +50,10 @@ alloc:
 ; #[systemv]
 ; unsafe fn dealloc((ptr := rdi): *mut ())
 dealloc:
+    ; if ptr == null { return }
+    test rdi, rdi
+    jz .exit
+
     ; ptr -= 16
     sub rdi, 16
 
@@ -67,4 +72,48 @@ dealloc:
     call abort
 
     .exit:
+    ret
+
+; #[systemv]
+; unsafe fn realloc((ptr := rdi): *mut (), (size := rsi): usize) -> *mut () := rax
+realloc:
+    push r12
+    push r13
+    push r14
+
+    ; let (ptr := r12) = ptr
+    mov r12, rdi
+
+    ; let (size := r13) = size
+    mov r13, rsi
+
+    ; let (result := r14) = alloc(size)
+    mov rdi, r13
+    call alloc
+    mov r14, rax
+
+    ; let (prev_size := rax) = *(ptr - 16).cast::<usize>()
+    mov rax, qword [r12 - 16]
+
+    ; let (copy_size := rdx) = min(size, prev_size)
+    cmp r13, rax
+    mov rdx, r13
+    cmovb rdx, rax
+
+    ; copy(ptr, result, copy_size)
+    mov rdi, r12
+    mov rsi, r14
+    ; mov rdx, rdx
+    call copy
+
+    ; dealloc(ptr)
+    mov rdi, r12
+    call dealloc
+
+    ; return result
+    mov rax, r14
+
+    pop r14
+    pop r13
+    pop r12
     ret

@@ -59,12 +59,143 @@ section .bss
     message resd 512
     ; static last_id: u32
     last_id resd 1
+    string resb String.sizeof
 
 section .text
 
 ; #[systemv]
 ; fn main() -> i64
 main:
+    ; string = String::new()
+    mov rdi, string
+    call String_new
+
+    mov rdi, string
+    mov rsi, "H"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "e"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "l"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "l"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "o"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, ","
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, " "
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "W"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "o"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "r"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "l"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "d"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "!"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, LF
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "H"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "e"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "l"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "l"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "o"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, ","
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, " "
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "W"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "o"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "r"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "l"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "d"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, "!"
+    call String_push_ascii
+
+    mov rdi, string
+    mov rsi, LF
+    call String_push_ascii
+
+    ; write(STDOUT, string.ptr, string.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, qword [string + String.ptr]
+    mov rdx, qword [string + String.len]
+    syscall
+    call exit_on_error
+
+    ; drop(string)
+    mov rdi, string
+    call String_drop
+
+    ret
+
     ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
     mov rax, SYSCALL_SOCKET
     mov rdi, AF_UNIX
