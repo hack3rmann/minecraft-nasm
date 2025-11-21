@@ -54,6 +54,12 @@
     POPA
 %endmacro
 
+%macro DEBUG_NEWLINE 0
+    PUSHA
+    call print_newline
+    POPA
+%endmacro
+
 STDIN                        equ 0
 STDOUT                       equ 1
 STDERR                       equ 2
