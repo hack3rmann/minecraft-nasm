@@ -11,6 +11,7 @@ SYSCALL_SOCKET               equ 41
 SYSCALL_CONNECT              equ 42
 SYSCALL_EXIT                 equ 60
 SYSCALL_KILL                 equ 62
+SYSCALL_GETUID               equ 102
 
 AF_UNIX                      equ 1
 SOCK_STREAM                  equ 1

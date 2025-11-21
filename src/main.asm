@@ -7,13 +7,18 @@
 %include "wire.s"
 
 section .rodata
-    addr:
-        .sun_family              dw AF_UNIX
-        .sun_path                db "/run/user/1000/wayland-1"
-    addr_len                     equ $-addr
-
     display_error_string         db "wayland error: "
     display_error_string.len     equ $-display_error_string
+
+    xdg_runtime_dir_str          db "XDG_RUNTIME_DIR"
+    xdg_runtime_dir_str.len      equ $-xdg_runtime_dir_str
+    wayland_display_str          db "WAYLAND_DISPLAY"
+    wayland_display_str.len      equ $-wayland_display_str
+
+    xdg_runtime_dir_default_prefix      db "/run/user/"
+    xdg_runtime_dir_default_prefix.len  equ $-xdg_runtime_dir_default_prefix
+    wayland_display_default      db "wayland-0"
+    wayland_display_default.len  equ $-wayland_display_default
 
     global_string1               db "RegistryGlobal {", LF, "    name: "
     global_string1.len           equ $-global_string1
@@ -23,6 +28,35 @@ section .rodata
     global_string3.len           equ $-global_string3
     global_string4               db ",", LF, "}", LF
     global_string4.len           equ $-global_string4
+
+section .bss
+    ; pub static argc: usize
+    global argc
+    argc resq 1
+    ; pub static argv: *const *const u8
+    global argv
+    argv resq 1
+    ; pub static envp: *const *const u8
+    global envp
+    envp resq 1
+    ; static display_fd: usize
+    display_fd resq 1
+    ; static stack_align: usize
+    stack_align resq 1
+
+    ; static socket_path: String
+    socket_path resb String.sizeof
+
+    ; static message: [u32; 512]
+    message resd 512
+    ; static last_id: u32
+    last_id resd 1
+    string resb String.sizeof
+
+    addr:
+        .sun_family resw 1
+        .sun_path   resb 254
+    addr_max_len    equ $-addr
 
 struc DisplayError
     .object_id      resd 1
@@ -40,32 +74,28 @@ struc RegistryGlobal
     .sizeof         equ $-.name
 endstruc
 
-section .bss
-    ; pub static argc: usize
-    global argc
-    argc resq 1
-    ; pub static argv: *const *const u8
-    global argv
-    argv resq 1
-    ; pub static envp: *const *const u8
-    global envp
-    envp resq 1
-    ; static display_fd: usize
-    display_fd resq 1
-    ; static stack_align: usize
-    stack_align resq 1
-
-    ; static message: [u32; 512]
-    message resd 512
-    ; static last_id: u32
-    last_id resd 1
-    string resb String.sizeof
-
 section .text
 
 ; #[systemv]
 ; fn main() -> i64
 main:
+    ; socket_path = get_wayland_socket_path()
+    mov rdi, socket_path
+    call get_wayland_socket_path
+
+    ; addr.sun_family = AF_UNIX
+    mov word [addr.sun_family], AF_UNIX
+
+    ; if socket_path.len > addr_max_len - 2 { abort() }
+    cmp qword [socket_path + String.len], addr_max_len - 2
+    ja abort
+
+    ; copy(socket_path.ptr, &addr.sun_path, socket_path.len)
+    mov rdi, qword [socket_path + String.ptr]
+    mov rsi, addr.sun_path
+    mov rdx, qword [socket_path + String.len]
+    call copy
+
     ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
     mov rax, SYSCALL_SOCKET
     mov rdi, AF_UNIX
@@ -75,11 +105,12 @@ main:
     call exit_on_error
     mov qword [display_fd], rax
 
-    ; connect(display_fd, &const addr, addr_len)
+    ; connect(display_fd, &const addr, 2 + socket_path.len)
     mov rax, SYSCALL_CONNECT
     mov rdi, qword [display_fd]
     mov rsi, addr
-    mov rdx, addr_len
+    mov rdx, qword [socket_path + String.len]
+    add rdx, 2
     syscall
     call exit_on_error
 
@@ -166,8 +197,113 @@ main:
     syscall
     call exit_on_error
 
+    ; drop(socket_path)
+    mov rdi, socket_path
+    call String_drop
+
     ; return EXIT_SUCCESS
     xor rax, rax
+    ret
+
+; #[systemv]
+; fn get_wayland_socket_path(($ret := rdi): *mut String) -> String
+get_wayland_socket_path:
+    push r12
+    push r13
+    push r14
+
+    ; let ($ret := r12) = $ret
+    mov r12, rdi
+
+    ; $ret = String::new()
+    mov rdi, r12
+    call String_new
+
+    ; let (runtime_dir := r13) = get_env("XDG_RUNTIME_DIR", .len)
+    mov rdi, xdg_runtime_dir_str
+    mov rdx, xdg_runtime_dir_str.len
+    call get_env
+    mov r13, rsi
+
+    ; if runtime_dir != null {
+    test r13, r13
+    jz .runtime_else
+
+        ; let (runtime_dir_len := r14) = cstr_len(runtime_dir)
+        mov rsi, r13
+        call cstr_len
+        mov r14, rdx
+
+        ; $ret.push_str(Str { runtime_dir_len, runtime_dir })
+        mov rdi, r12
+        mov rsi, r14
+        mov rdx, r13
+        call String_push_str
+
+    ; } else {
+    jmp .runtime_end_if
+    .runtime_else:
+
+        ; $ret.push_str(xdg_runtime_dir_default_prefix)
+        mov rdi, r12
+        mov rsi, xdg_runtime_dir_default_prefix.len
+        mov rdx, xdg_runtime_dir_default_prefix
+        call String_push_str
+
+        ; let (uid := rax) = getuid()
+        mov rax, SYSCALL_GETUID
+        syscall
+
+        ; $ret.format_u64(uid)
+        mov rdi, r12
+        mov rsi, rax
+        call String_format_u64
+
+    ; }
+    .runtime_end_if:
+
+    ; $ret.push_ascii('/')
+    mov rdi, r12
+    mov rsi, "/"
+    call String_push_ascii
+
+    ; let (wayland_display := r13) = get_env("WAYLAND_DISPLAY", .len)
+    mov rdi, wayland_display_str
+    mov rdx, wayland_display_str.len
+    call get_env
+    mov r13, rsi
+
+    ; if wayland_display != null {
+    test r13, r13
+    jz .display_else
+
+        ; let (wayland_display_len := r14) = cstr_len(wayland_display)
+        mov rsi, r13
+        call cstr_len
+        mov r14, rdx
+
+        ; $ret.push_str(Str { wayland_display_len, wayland_display })
+        mov rdi, r12
+        mov rsi, r14
+        mov rdx, r13
+        call String_push_str
+
+    ; } else {
+    jmp .display_end_if
+    .display_else:
+
+        ; $ret.push_str(wayland_display_default)
+        mov rdi, r12
+        mov rsi, wayland_display_default.len
+        mov rdx, wayland_display_default
+        call String_push_str
+
+    ; }
+    .display_end_if:
+
+    pop r14
+    pop r13
+    pop r12
     ret
 
 ; #[systemv]

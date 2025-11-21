@@ -11,7 +11,7 @@ struc String
 endstruc
 
 extern String_new, String_drop, String_push_ascii, String_push_str, String_with_capacity, \
-       String_clear
+       String_clear, String_format_u64, String_reserve, String_reserve_exact
 
 struc Str
     .len    resq 1

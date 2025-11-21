@@ -46,6 +46,81 @@ String_with_capacity:
     ret
 
 ; #[systemv]
+; fn String::reserve_exact(&mut self := rdi, (additional := rsi): usize)
+String_reserve_exact:
+    push r12
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; let (new_cap := rax) = self.len + additional
+    mov rax, qword [r12 + String.len]
+    add rax, rsi
+
+    ; if self.cap >= new_cap { return }
+    cmp qword [r12 + String.cap], rax
+    jae .exit
+
+    ; self.cap = new_cap
+    mov qword [r12 + String.cap], rax
+
+    ; if self.ptr == null {
+    cmp qword [r12 + String.ptr], 0
+    jne .else
+
+        ; self.ptr = alloc(new_cap)
+        mov rdi, rax
+        call alloc
+        mov qword [r12 + String.ptr], rax
+
+    ; } else {
+    jmp .end_if
+    .else:
+
+        ; self.ptr = realloc(self.ptr, new_cap)
+        mov rdi, qword [r12 + String.ptr]
+        mov rsi, rax
+        call realloc
+        mov qword [r12 + String.ptr], rax
+
+    ; }
+    .end_if:
+
+    .exit:
+    pop r12
+    ret
+
+; FIXME(hack3rmann): debug and fix
+;
+; #[systemv]
+; fn String::reserve(&mut self := rdi, (additional := rsi): usize)
+String_reserve:
+    push r12
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; let (predicted_cap := rax) = self.cap + self.cap / 2
+    mov rax, qword [r12 + String.cap]
+    shr rax, 1
+    add rax, qword [r12 + String.cap]
+
+    ; let (next_cap := rax) = max(predicted_cap, self.len + additional)
+    mov rdi, qword [r12 + String.len]
+    add rdi, rsi
+    cmp rax, rdi
+    cmovb rax, rdi
+
+    ; self.reserve_exact(next_cap - self.len)
+    sub rax, qword [r12 + String.len]
+    mov rdi, r12
+    mov rsi, rax
+    call String_reserve_exact
+
+    pop r12
+    ret
+
+; #[systemv]
 ; fn String::push_ascii(&mut self := rdi, (value := rsi): u8)
 String_push_ascii:
     push r12
@@ -209,4 +284,79 @@ String_drop:
     call String_new
 
     pop r12
+    ret
+
+; #[systemv]
+; fn String::format_u64(&mut self := rdi, (value := rsi): u64)
+String_format_u64:
+    push rbp
+    push r12
+    push r13
+    mov rbp, rsp
+
+    .digits             equ -24
+    .n_digits           equ 24
+    .stack_size         equ ALIGNED(-.digits)
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; let digits: [u8; 24]
+    sub rsp, .stack_size
+
+    ; digits[-1] = b'0'
+    mov byte [rbp+.digits+.n_digits-1], "0"
+
+    ; let n_digits = 0
+    xor rcx, rcx
+
+    ; while value != 0 {
+    .while:
+    test rsi, rsi
+    jz .end_while
+
+        ; let ({ value / 10 } := rax, digit_value := rdx) = divmod(value, 10)
+        xor rdx, rdx
+        mov rax, rsi
+        mov r8, 10
+        div r8
+
+        ; value = value / 10
+        mov rsi, rax
+
+        ; let (digit := dl) = (digit_value + '0') as u8
+        add rdx, "0"
+
+        ; digits[digits.len - 1 - n_digits] = digit
+        mov r8, rcx
+        neg r8
+        mov byte [rbp + .digits + .n_digits - 1 + r8], dl
+
+        ; n_digits += 1
+        inc rcx
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ; if n_digits == 0 { n_digits = 1 }
+    test rcx, rcx
+    mov rax, 1
+    cmovz rcx, rax
+
+    ; let (n_digits := r13) = n_digits
+    mov r13, rcx
+
+    ; self.push_str(Str { n_digits, &digits + digits.len - n_digits })
+    mov rdi, r12
+    mov rsi, r13
+    lea rdx, [rbp + .digits + .n_digits]
+    sub rdx, r13
+    call String_push_str
+
+    add rsp, .stack_size
+
+    pop r13
+    pop r12
+    pop rbp
     ret
