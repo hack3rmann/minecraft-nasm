@@ -77,6 +77,85 @@ String_push_ascii:
 
 ; #[systemv]
 ; fn String::push_str(&mut self := rdi, Str { len := rsi, ptr := rdx }: Str)
+String_push_str:
+    push r12
+    push r13
+    push r14
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; let (str_len := r13) = len
+    mov r13, rsi
+
+    ; let (str_ptr := r14) = ptr
+    mov r14, rdx
+
+    ; if self.cap == 0 {
+    cmp qword [r12 + String.cap], 0
+    jne .else_if
+
+        ; let (new_cap := rax) = max(16, str_len)
+        mov rax, 16
+        cmp rax, r13
+        cmovb rax, r13
+
+        ; self.cap = new_cap
+        mov qword [r12 + String.cap], rax
+
+        ; self.ptr = alloc(new_cap)
+        mov rdi, rax
+        call alloc
+        mov qword [r12 + String.ptr], rax
+
+    ; } else if self.cap - self.len < str_len {
+    jmp .end_if
+    .else_if:
+    mov rax, qword [r12 + String.cap]
+    sub rax, qword [r12 + String.len]
+    cmp rax, r13
+    jae .end_if
+
+        ; let (predicted_cap := rax) = self.cap + self.cap / 2
+        mov rax, qword [r12 + String.cap]
+        shr rax, 1
+        add rax, qword [r12 + String.cap]
+
+        ; let (next_cap := rax) = if predicted_cap - self.len >= str_len
+        ; { predicted_cap } else { self.len + str_len }
+        mov rdx, qword [r12 + String.len]
+        add rdx, r13
+        mov rdi, rax
+        sub rdi, qword [r12 + String.len]
+        cmp rdi, r13
+        cmovb rax, rdx
+
+        ; self.cap = next_cap
+        mov qword [r12 + String.cap], rax
+
+        ; self.ptr = realloc(self.ptr, next_cap)
+        mov rdi, qword [r12 + String.ptr]
+        mov rsi, rax
+        call realloc
+        mov qword [r12 + String.ptr], rax
+
+    ; }
+    .end_if:
+
+    ; copy(str_ptr, self.ptr + self.len, str_len)
+    mov rdi, r14
+    mov rsi, qword [r12 + String.ptr]
+    add rsi, qword [r12 + String.len]
+    mov rdx, r13
+    call copy
+
+    ; self.len += str_len
+    add qword [r12 + String.len], r13
+
+    pop r14
+    pop r13
+    pop r12
+    ret
 
 ; #[systemv]
 ; fn String::drop(&mut self := rdi)
