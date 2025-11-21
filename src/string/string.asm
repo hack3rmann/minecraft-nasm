@@ -259,6 +259,24 @@ String_push_str:
     pop r12
     ret
 
+; #[systemv]
+; fn String::push_cstr(&mut self := rdi, (cstr := rsi): *mut u8)
+String_push_cstr:
+    ; let (len := rdx) = cstr_len(cstr)
+    ; mov rsi, rsi
+    call cstr_len
+
+    ; let (cstr := r8) = cstr
+    mov r8, rsi
+
+    ; self.push_str(Str { len, cstr })
+    ; mov rdi, rdi
+    mov rsi, rdx
+    mov rdx, r8
+    call String_push_str
+
+    ret
+
 ; #[fastcall]
 ; fn String::clear(&mut self := rdi)
 String_clear:

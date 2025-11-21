@@ -20,6 +20,18 @@ section .rodata
     wayland_display_default      db "wayland-0"
     wayland_display_default.len  equ $-wayland_display_default
 
+    string_sample                db "Hello, {{ {str} }}! The happy number is `{usize}`. And here is a C-string: '{cstr}'", LF
+    string_sample.len            equ $-string_sample
+
+    name                         db "hack3rmann"
+    name.len                     equ $-name
+    cstring                      db "I am a cstr!", 0
+
+    args_sample                  dq name.len
+                                 dq name
+                                 dq 69
+                                 dq cstring
+
     global_string1               db "RegistryGlobal {", LF, "    name: "
     global_string1.len           equ $-global_string1
     global_string2               db ",", LF, "    interface: '"
@@ -33,14 +45,18 @@ section .bss
     ; pub static argc: usize
     global argc
     argc resq 1
+
     ; pub static argv: *const *const u8
     global argv
     argv resq 1
+
     ; pub static envp: *const *const u8
     global envp
     envp resq 1
+
     ; static display_fd: usize
     display_fd resq 1
+
     ; static stack_align: usize
     stack_align resq 1
 
@@ -49,6 +65,7 @@ section .bss
 
     ; static message: [u32; 512]
     message resd 512
+
     ; static last_id: u32
     last_id resd 1
     string resb String.sizeof
@@ -79,6 +96,32 @@ section .text
 ; #[systemv]
 ; fn main() -> i64
 main:
+    ; string = String::new()
+    mov rdi, string
+    call String_new
+
+    ; string.format_array(string_sample, args_sample)
+    mov rdi, string
+    mov rsi, string_sample.len
+    mov rdx, string_sample
+    mov rcx, args_sample
+    call String_format_array
+
+    ; write(STDOUT, string.ptr, string.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, qword [string + String.ptr]
+    mov rdx, qword [string + String.len]
+    syscall
+    call exit_on_error
+
+    ; drop(string)
+    mov rdi, string
+    call String_drop
+
+    xor rax, rax
+    ret
+
     ; socket_path = get_wayland_socket_path()
     mov rdi, socket_path
     call get_wayland_socket_path
@@ -86,7 +129,7 @@ main:
     ; addr.sun_family = AF_UNIX
     mov word [addr.sun_family], AF_UNIX
 
-    ; if socket_path.len > addr_max_len - 2 { abort() }
+    ; assert socket_path.len <= addr_max_len - 2
     cmp qword [socket_path + String.len], addr_max_len - 2
     ja abort
 
