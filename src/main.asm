@@ -7,39 +7,25 @@
 %include "wire.s"
 
 section .rodata
-    display_error_string         db "wayland error: "
-    display_error_string.len     equ $-display_error_string
+    display_error_string          db "wayland error: "
+    display_error_string.len      equ $-display_error_string
 
-    xdg_runtime_dir_str          db "XDG_RUNTIME_DIR"
-    xdg_runtime_dir_str.len      equ $-xdg_runtime_dir_str
-    wayland_display_str          db "WAYLAND_DISPLAY"
-    wayland_display_str.len      equ $-wayland_display_str
+    xdg_runtime_dir_str           db "XDG_RUNTIME_DIR"
+    xdg_runtime_dir_str.len       equ $-xdg_runtime_dir_str
+    wayland_display_str           db "WAYLAND_DISPLAY"
+    wayland_display_str.len       equ $-wayland_display_str
 
     xdg_runtime_dir_default_prefix      db "/run/user/"
     xdg_runtime_dir_default_prefix.len  equ $-xdg_runtime_dir_default_prefix
-    wayland_display_default      db "wayland-0"
-    wayland_display_default.len  equ $-wayland_display_default
+    wayland_display_default             db "wayland-0"
+    wayland_display_default.len         equ $-wayland_display_default
 
-    string_sample                db "Hello, {{ {str} }}! The happy number is `{usize}`. And here is a C-string: '{cstr}'", LF
-    string_sample.len            equ $-string_sample
-
-    name                         db "hack3rmann"
-    name.len                     equ $-name
-    cstring                      db "I am a cstr!", 0
-
-    args_sample                  dq name.len
-                                 dq name
-                                 dq 69
-                                 dq cstring
-
-    global_string1               db "RegistryGlobal {", LF, "    name: "
-    global_string1.len           equ $-global_string1
-    global_string2               db ",", LF, "    interface: '"
-    global_string2.len           equ $-global_string2
-    global_string3               db "',", LF, "    version: "
-    global_string3.len           equ $-global_string3
-    global_string4               db ",", LF, "}", LF
-    global_string4.len           equ $-global_string4
+    global_fmt      db "RegistryGlobal {{", LF
+                    db "    name: {usize},", LF
+                    db "    interface: {str},", LF
+                    db "    version: {usize},", LF
+                    db "}}", LF
+    global_fmt.len  equ $-global_fmt
 
 section .bss
     ; pub static argc: usize
@@ -66,9 +52,8 @@ section .bss
     ; static message: [u32; 512]
     message resd 512
 
-    ; static last_id: u32
-    last_id resd 1
-    string resb String.sizeof
+    ; static format_buffer: String
+    format_buffer resb String.sizeof
 
     addr:
         .sun_family resw 1
@@ -96,31 +81,9 @@ section .text
 ; #[systemv]
 ; fn main() -> i64
 main:
-    ; string = String::new()
-    mov rdi, string
+    ; format_buffer = String::new()
+    mov rdi, format_buffer
     call String_new
-
-    ; string.format_array(string_sample, args_sample)
-    mov rdi, string
-    mov rsi, string_sample.len
-    mov rdx, string_sample
-    mov rcx, args_sample
-    call String_format_array
-
-    ; write(STDOUT, string.ptr, string.len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, qword [string + String.ptr]
-    mov rdx, qword [string + String.len]
-    syscall
-    call exit_on_error
-
-    ; drop(string)
-    mov rdi, string
-    call String_drop
-
-    xor rax, rax
-    ret
 
     ; socket_path = get_wayland_socket_path()
     mov rdi, socket_path
@@ -169,9 +132,6 @@ main:
 
     ; message.body.id = wire_id.wl_registry
     mov dword [message + WireMessage.body + 0], wire_id.wl_registry
-
-    ; last_id = wire_id.wl_registry
-    mov dword [last_id], wire_id.wl_registry
 
     ; let (n_bytes := rax) = write(display_fd, &message, message.size)
     mov rax, SYSCALL_WRITE
@@ -242,6 +202,10 @@ main:
 
     ; drop(socket_path)
     mov rdi, socket_path
+    call String_drop
+
+    ; drop(format_buffer)
+    mov rdi, format_buffer
     call String_drop
 
     ; return EXIT_SUCCESS
@@ -352,67 +316,75 @@ get_wayland_socket_path:
 ; #[systemv]
 ; fn handle_registry_global()
 handle_registry_global:
-    ; write(STDOUT, global_string1, global_string1.len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, global_string1
-    mov rdx, global_string1.len
-    syscall
+    push rbp
+    mov rbp, rsp
 
-    ; let (name := rdi) = message.body.name
-    xor rdi, rdi
-    mov edi, dword [message + WireMessage.body + RegistryGlobal.name]
-    call print_uint
+    GlobalFmtArgs:
+        .name               equ 0
+        .interface          equ 8
+            .interface.len  equ 8
+            .interface.ptr  equ 16
+        .version            equ 24
+        .sizeof             equ 32
 
-    ; write(STDOUT, global_string2, global_string2.len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, global_string2
-    mov rdx, global_string2.len
-    syscall
+    .fmt_args       equ -GlobalFmtArgs.sizeof
+    .stack_size     equ ALIGNED(-.fmt_args)
 
-    ; let (interface := rsi) = &message.body.interface
-    mov rsi, message + WireMessage.body + RegistryGlobal.interface
+    ; let fmt_args: struct {
+    ;     name: usize,
+    ;     interface: Str,
+    ;     version: usize,
+    ; }
+    sub rsp, .stack_size
 
-    ; let (interface_size := r8) = message.body.interface.len
+    ; fmt_args.name = message.body.name
+    xor rax, rax
+    mov eax, dword [message + WireMessage.body + RegistryGlobal.name]
+    mov qword [rbp + .fmt_args + GlobalFmtArgs.name], rax
+
+    ; fmt_args.interface.len = message.body.interface.len
     xor rax, rax
     mov eax, dword [message + WireMessage.body + RegistryGlobal.interface.len]
-    mov r8, rax
+    mov qword [rbp + .fmt_args + GlobalFmtArgs.interface.len], rax
 
-    ; // remove null terminator
-    ; let (interface_len := rdi) = interface_size - 1
-    lea rdx, [r8 - 1]
+    ; let (interface_len := r8) = fmt_args.interface.len - 1
+    lea r8, [rax - 1]
 
-    ; write(STDOUT, interface, interface_len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    ; mov rsi, rsi
-    ; mov rdx, rdx
-    syscall
-
-    ; write(STDOUT, global_string3, global_string3.len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, global_string3
-    mov rdx, global_string3.len
-    syscall
+    ; fmt_args.interface.ptr = &message.body.interface
+    mov qword [rbp + .fmt_args + GlobalFmtArgs.interface.ptr], \
+        message + WireMessage.body + RegistryGlobal.interface
 
     ; let (string_block_size := r8) = (interface_len + 3) / 4
     add r8, 3
     shr r8, 2
 
-    ; let (version := rdi) = message.body.version
-    xor rdi, rdi
-    mov edi, dword [message + WireMessage.body + RegistryGlobal.sizeof + 4*r8]
-    call print_uint
+    ; fmt_args.version = message.body.version
+    xor rax, rax
+    mov eax, dword [message + WireMessage.body + RegistryGlobal.sizeof + 4*r8]
+    mov qword [rbp + .fmt_args + GlobalFmtArgs.version], rax
 
-    ; write(STDOUT, global_string4, global_string4.len)
+    ; format_buffer.clear()
+    mov rdi, format_buffer
+    call String_clear
+
+    ; format_buffer.format_array(global_fmt, &fmt_args)
+    mov rdi, format_buffer
+    mov rsi, global_fmt.len
+    mov rdx, global_fmt
+    lea rcx, [rbp + .fmt_args]
+    call String_format_array
+
+    ; write(STDOUT, format_buffer.ptr, format_buffer.len)
     mov rax, SYSCALL_WRITE
     mov rdi, STDOUT
-    mov rsi, global_string4
-    mov rdx, global_string4.len
+    mov rsi, qword [format_buffer + String.ptr]
+    mov rdx, qword [format_buffer + String.len]
     syscall
+    call exit_on_error
 
+    add rsp, .stack_size
+
+    pop rbp
     ret
 
 ; #[jumpable]
@@ -500,9 +472,6 @@ send_sync:
 
     ; message.body.id = wire_id.wl_callback
     mov dword [message + WireMessage.body + 0], wire_id.wl_callback
-
-    ; last_id = wire_id.wl_callback
-    mov dword [last_id], wire_id.wl_callback
 
     ; let (n_bytes := rax) = write(display_fd, &message, message.size)
     mov rax, SYSCALL_WRITE
