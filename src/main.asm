@@ -319,13 +319,15 @@ handle_registry_global:
     push rbp
     mov rbp, rsp
 
-    GlobalFmtArgs:
-        .name               equ 0
-        .interface          equ 8
-            .interface.len  equ 8
-            .interface.ptr  equ 16
-        .version            equ 24
-        .sizeof             equ 32
+    struc GlobalFmtArgs
+        ; name: usize
+        .name               resq 1
+        ; interface: Str
+        .interface          resb Str.sizeof
+        ; version: usize
+        .version            resq 1
+        .sizeof             equ $-.name
+    endstruc
 
     .fmt_args       equ -GlobalFmtArgs.sizeof
     .stack_size     equ ALIGNED(-.fmt_args)
@@ -345,13 +347,13 @@ handle_registry_global:
     ; fmt_args.interface.len = message.body.interface.len
     xor rax, rax
     mov eax, dword [message + WireMessage.body + RegistryGlobal.interface.len]
-    mov qword [rbp + .fmt_args + GlobalFmtArgs.interface.len], rax
+    mov qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.len], rax
 
     ; let (interface_len := r8) = fmt_args.interface.len - 1
     lea r8, [rax - 1]
 
     ; fmt_args.interface.ptr = &message.body.interface
-    mov qword [rbp + .fmt_args + GlobalFmtArgs.interface.ptr], \
+    mov qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.ptr], \
         message + WireMessage.body + RegistryGlobal.interface
 
     ; let (string_block_size := r8) = (interface_len + 3) / 4
