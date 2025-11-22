@@ -12,7 +12,7 @@ endstruc
 
 extern String_new, String_drop, String_push_ascii, String_push_str, String_with_capacity, \
        String_clear, String_format_u64, String_reserve, String_reserve_exact, \
-       String_format_array, String_push_cstr
+       String_format_array, String_push_cstr, String_format_i64
 
 extern parse_raw_string, parse_arg_escape, parse_arg_string, parse_arg_type
 

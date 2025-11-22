@@ -305,6 +305,111 @@ String_drop:
     ret
 
 ; #[systemv]
+; fn String::format_i64(&mut self := rdi, (value := rsi): i64)
+String_format_i64:
+    push rbp
+    push r12
+    push r13
+    push rbx
+    mov rbp, rsp
+
+    .digits             equ -24
+    .n_digits           equ 24
+    .stack_size         equ ALIGNED(-.digits)
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; let digits: [u8; 24]
+    sub rsp, .stack_size
+
+    ; digits[-1] = b'0'
+    mov byte [rbp+.digits+.n_digits-1], "0"
+
+    ; let (n_digits := rcx) = 0
+    xor rcx, rcx
+
+    ; let (is_negative := bl) = false
+    xor bl, bl
+
+    ; if value < 0 {
+    cmp rsi, 0
+    jge .end_if_less
+
+        ; is_negative = true
+        inc bl
+
+        ; value = -value
+        neg rsi
+
+        ; digits = [b'-'; 24]
+        mov dword [rbp + .digits + 0], "----"
+        mov dword [rbp + .digits + 4], "----"
+        mov dword [rbp + .digits + 8], "----"
+        mov dword [rbp + .digits + 12], "----"
+        mov dword [rbp + .digits + 16], "----"
+        mov dword [rbp + .digits + 20], "----"
+
+    ; }
+    .end_if_less:
+
+    ; while value != 0 {
+    .while:
+    test rsi, rsi
+    jz .end_while
+
+        ; let ({ value / 10 } := rax, digit_value := rdx) = divmod(value, 10)
+        xor rdx, rdx
+        mov rax, rsi
+        mov r8, 10
+        div r8
+
+        ; value = value / 10
+        mov rsi, rax
+
+        ; let (digit := dl) = (digit_value + '0') as u8
+        add rdx, "0"
+
+        ; digits[digits.len - 1 - n_digits] = digit
+        mov r8, rcx
+        neg r8
+        mov byte [rbp + .digits + .n_digits - 1 + r8], dl
+
+        ; n_digits += 1
+        inc rcx
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ; if n_digits == 0 { n_digits = 1 }
+    test rcx, rcx
+    mov rax, 1
+    cmovz rcx, rax
+
+    ; if is_negative { n_digits += 1 }
+    movzx rbx, bl
+    add rcx, rbx
+
+    ; let (n_digits := r13) = n_digits
+    mov r13, rcx
+
+    ; self.push_str(Str { n_digits, &digits + digits.len - n_digits })
+    mov rdi, r12
+    mov rsi, r13
+    lea rdx, [rbp + .digits + .n_digits]
+    sub rdx, r13
+    call String_push_str
+
+    add rsp, .stack_size
+
+    pop rbx
+    pop r13
+    pop r12
+    pop rbp
+    ret
+
+; #[systemv]
 ; fn String::format_u64(&mut self := rdi, (value := rsi): u64)
 String_format_u64:
     push rbp

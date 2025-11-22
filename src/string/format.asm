@@ -250,8 +250,10 @@ String_format_once:
     cmp r13, ARGTYPE_ISIZE
     jne .else_if_str
 
-        ; abort()
-        jmp abort
+        ; self.format_i64(args[0])
+        mov rdi, r12
+        mov rsi, qword [r14]
+        call String_format_i64
 
         ; return 1
         mov rax, 1
