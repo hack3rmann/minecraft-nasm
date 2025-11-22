@@ -1,6 +1,8 @@
 %ifndef _MEMORY_INC
 %define _MEMORY_INC
 
+MMAP_PAGE_SIZE  equ 4096
+
 PROT_NONE       equ 0
 PROT_READ       equ 1
 PROT_WRITE      equ 2

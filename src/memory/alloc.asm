@@ -87,6 +87,21 @@ realloc:
     ; let (size := r13) = size
     mov r13, rsi
 
+    ; if size < MMAP_PAGE_SIZE - 16 {
+    cmp r13, MMAP_PAGE_SIZE - 16
+    jae .end_if
+
+        ; *(ptr - 16).cast::<usize>() = size + 16
+        lea rax, [rsi + 16]
+        mov qword [r12 - 16], rax
+
+        ; return ptr
+        mov rax, r12
+        jmp .exit
+
+    ; }
+    .end_if:
+
     ; let (result := r14) = alloc(size)
     mov rdi, r13
     call alloc
@@ -113,6 +128,7 @@ realloc:
     ; return result
     mov rax, r14
 
+    .exit:
     pop r14
     pop r13
     pop r12
