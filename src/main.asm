@@ -22,7 +22,7 @@ section .rodata
 
     global_fmt      db "RegistryGlobal {{", LF
                     db "    name: {usize},", LF
-                    db "    interface: {str},", LF
+                    db "    interface: '{str}',", LF
                     db "    version: {usize},", LF
                     db "}}", LF
     global_fmt.len  equ $-global_fmt
