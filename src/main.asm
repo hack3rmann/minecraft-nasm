@@ -20,12 +20,41 @@ section .rodata
     wayland_display_default             db "wayland-0"
     wayland_display_default.len         equ $-wayland_display_default
 
-    global_fmt      db "RegistryGlobal {{", LF
+    global_fmt      db "RegistryGlobalEvent {{", LF
                     db "    name: {usize},", LF
                     db "    interface: '{str}',", LF
                     db "    version: {usize},", LF
                     db "}}", LF
     global_fmt.len  equ $-global_fmt
+
+    wl_compositor_str.ptr db "wl_compositor"
+    wl_compositor_str.len equ $-wl_compositor_str.ptr
+
+struc DisplayError
+    .object_id      resd 1
+    .code           resd 1
+    .message.len    resd 1
+    .message        resb 0
+    .sizeof         equ $-.object_id
+endstruc
+
+struc RegistryGlobalEvent
+    .name           resd 1
+    .interface.len  resd 1
+    .interface      resb 0
+    .version        resd 0
+    .sizeof         equ $-.name
+endstruc
+
+struc RegistryGlobal
+    ; name: u32
+    .name           resd 1
+    ; version: u32
+    .version        resd 1
+    ; interface: String
+    .interface      resb String.sizeof
+    .sizeof         equ $-.name
+endstruc
 
 section .bss
     ; pub static argc: usize
@@ -60,23 +89,44 @@ section .bss
         .sun_path   resb 254
     addr_max_len    equ $-addr
 
-struc DisplayError
-    .object_id      resd 1
-    .code           resd 1
-    .message.len    resd 1
-    .message        resb 0
-    .sizeof         equ $-.object_id
-endstruc
+    ; static wl_compositor_global: RegistryGlobal
+    wl_compositor_global resb RegistryGlobal.sizeof
 
-struc RegistryGlobal
-    .name           resd 1
-    .interface.len  resd 1
-    .interface      resb 0
-    .version        resd 0
-    .sizeof         equ $-.name
-endstruc
+    wl_compositor_global_args resq 4
 
 section .text
+
+; fn RegistryGlobal::new(($ret := rdi): *mut Self) -> Self
+RegistryGlobal_new:
+    ; $ret->name = 0
+    mov dword [rdi + RegistryGlobal.name], 0
+
+    ; $ret->version = 0
+    mov dword [rdi + RegistryGlobal.version], 0
+
+    ; $ret->interface = String::new()
+    lea rdi, [rdi + RegistryGlobal.interface]
+    call String_new
+
+    ret
+
+; fn RegistryGlobal::drop(&mut self := rdi)
+RegistryGlobal_drop:
+    push r12
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; drop(self.interface)
+    lea rdi, [r12 + RegistryGlobal.interface]
+    call String_drop
+
+    ; *self = RegistryGlobal::new()
+    mov rdi, r12
+    call RegistryGlobal_new
+
+    pop r12
+    ret
 
 ; #[systemv]
 ; fn main() -> i64
@@ -84,6 +134,10 @@ main:
     ; format_buffer = String::new()
     mov rdi, format_buffer
     call String_new
+
+    ; wl_compositor_global = RegistryGlobal::new()
+    mov rdi, wl_compositor_global
+    call RegistryGlobal_new
 
     ; socket_path = get_wayland_socket_path()
     mov rdi, socket_path
@@ -194,6 +248,41 @@ main:
     jmp .loop
     .end_loop:
 
+    ; wl_compositor_global_args.name = wl_compositor_global.name as usize
+    xor rax, rax
+    mov eax, dword [wl_compositor_global + RegistryGlobal.name]
+    mov qword [wl_compositor_global_args + 0], rax
+
+    ; wl_compositor_global_args.interface = wl_compositor_global.interface
+    mov rax, qword [wl_compositor_global + RegistryGlobal.interface + Str.len]
+    mov qword [wl_compositor_global_args + 8], rax
+    mov rax, qword [wl_compositor_global + RegistryGlobal.interface + Str.ptr]
+    mov qword [wl_compositor_global_args + 16], rax
+
+    ; wl_compositor_global_args.version = wl_compositor_global.version as usize
+    xor rax, rax
+    mov eax, dword [wl_compositor_global + RegistryGlobal.version]
+    mov qword [wl_compositor_global_args + 24], rax
+
+    ; format_buffer.clear()
+    mov rdi, format_buffer
+    call String_clear
+
+    ; format_buffer.format_array(global_fmt, &wl_compositor_global_args)
+    mov rdi, format_buffer
+    mov rsi, global_fmt.len
+    mov rdx, global_fmt
+    mov rcx, wl_compositor_global_args
+    call String_format_array
+
+    ; write(STDOUT, format_buffer.ptr, format_buffer.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, qword [format_buffer + String.ptr]
+    mov rdx, qword [format_buffer + String.len]
+    syscall
+    call exit_on_error
+
     ; close(fd)
     mov rax, SYSCALL_CLOSE
     mov rdi, qword [display_fd]
@@ -203,6 +292,10 @@ main:
     ; drop(socket_path)
     mov rdi, socket_path
     call String_drop
+
+    ; drop(wl_compositor_global)
+    mov rdi, wl_compositor_global
+    call RegistryGlobal_drop
 
     ; drop(format_buffer)
     mov rdi, format_buffer
@@ -316,6 +409,8 @@ get_wayland_socket_path:
 ; #[systemv]
 ; fn handle_registry_global()
 handle_registry_global:
+    push r12
+    push r13
     push rbp
     mov rbp, rsp
 
@@ -341,20 +436,21 @@ handle_registry_global:
 
     ; fmt_args.name = message.body.name
     xor rax, rax
-    mov eax, dword [message + WireMessage.body + RegistryGlobal.name]
+    mov eax, dword [message + WireMessage.body + RegistryGlobalEvent.name]
     mov qword [rbp + .fmt_args + GlobalFmtArgs.name], rax
 
-    ; fmt_args.interface.len = message.body.interface.len
+    ; fmt_args.interface.len = message.body.interface.len - 1
     xor rax, rax
-    mov eax, dword [message + WireMessage.body + RegistryGlobal.interface.len]
+    mov eax, dword [message + WireMessage.body + RegistryGlobalEvent.interface.len]
+    dec rax
     mov qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.len], rax
 
     ; let (interface_len := r8) = fmt_args.interface.len - 1
-    lea r8, [rax - 1]
+    mov r8, rax
 
     ; fmt_args.interface.ptr = &message.body.interface
     mov qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.ptr], \
-        message + WireMessage.body + RegistryGlobal.interface
+        message + WireMessage.body + RegistryGlobalEvent.interface
 
     ; let (string_block_size := r8) = (interface_len + 3) / 4
     add r8, 3
@@ -362,31 +458,45 @@ handle_registry_global:
 
     ; fmt_args.version = message.body.version
     xor rax, rax
-    mov eax, dword [message + WireMessage.body + RegistryGlobal.sizeof + 4*r8]
+    mov eax, dword [message + WireMessage.body + RegistryGlobalEvent.sizeof + 4*r8]
     mov qword [rbp + .fmt_args + GlobalFmtArgs.version], rax
 
-    ; format_buffer.clear()
-    mov rdi, format_buffer
-    call String_clear
+    ; let (interface_name := r12:r13) = fmt_args.interface
+    mov r12, qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.len]
+    mov r13, qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.ptr]
 
-    ; format_buffer.format_array(global_fmt, &fmt_args)
-    mov rdi, format_buffer
-    mov rsi, global_fmt.len
-    mov rdx, global_fmt
-    lea rcx, [rbp + .fmt_args]
-    call String_format_array
+    ; if interface_name == "wl_compositor" {
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, wl_compositor_str.len
+    mov rcx, wl_compositor_str.ptr
+    call Str_eq
+    test al, al
+    movzx rax, al
+    jz .end_if_name
 
-    ; write(STDOUT, format_buffer.ptr, format_buffer.len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, qword [format_buffer + String.ptr]
-    mov rdx, qword [format_buffer + String.len]
-    syscall
-    call exit_on_error
+        ; wl_compositor_global.name = fmt_args.name as u32
+        mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.name]
+        mov dword [wl_compositor_global + RegistryGlobal.name], eax
+
+        ; wl_compositor_global.interface.push_str(fmt_args.interface)
+        mov rdi, wl_compositor_global + RegistryGlobal.interface
+        mov rsi, r12
+        mov rdx, r13
+        call String_push_str
+
+        ; wl_compositor_global.version = fmt_args.version as u32
+        mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.version]
+        mov dword [wl_compositor_global + RegistryGlobal.version], eax
+
+    ; }
+    .end_if_name:
 
     add rsp, .stack_size
 
     pop rbp
+    pop r13
+    pop r12
     ret
 
 ; #[jumpable]

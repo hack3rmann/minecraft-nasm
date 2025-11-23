@@ -54,6 +54,21 @@
     POPA
 %endmacro
 
+%macro DEBUG_STR 2
+    PUSHA
+    
+    ; write(STDOUT, str.ptr, str.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, %2
+    mov rdx, %1
+    syscall
+
+    call print_newline
+
+    POPA
+%endmacro
+
 %macro DEBUG_NEWLINE 0
     PUSHA
     call print_newline
