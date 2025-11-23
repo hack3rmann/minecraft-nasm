@@ -16,6 +16,8 @@ section .bss
         .display_sync_opcode              equ 0
         .display_get_registry_opcode      equ 1
 
+        .registry_bind_opcode             equ 0
+
     wire_event:
         .display_error_opcode             equ 0
         .callback_done_opcode             equ 0
@@ -29,10 +31,6 @@ section .bss
 
     ; static wire_message_buffer: [u8; MESSAGE_BUFFER_SIZE]
     wire_message_buffer                   resb MESSAGE_BUFFER_SIZE
-
-; pub fn new_id(self, value: NewId) -> Self {
-;     self.uint(value.version).uint(value.id.into()).str(value.interface)
-; }
 
 struc WireMessageHeader
     ; object_id: u32
@@ -60,7 +58,11 @@ struc RegistryGlobalEvent
     .sizeof         equ $-.name
 endstruc
 
-extern wire_send_display_sync, wire_flush, wire_get_next_id, wire_send_display_get_registry, \
-       wire_write_uint, wire_write_str, wire_begin_request, wire_end_request
+extern wire_flush, wire_get_next_id, wire_write_uint, wire_write_str, \
+       wire_begin_request, wire_end_request
+
+extern wire_send_display_sync, wire_send_display_get_registry
+
+extern wire_send_registry_bind
 
 %endif ; !_WIRE_INC

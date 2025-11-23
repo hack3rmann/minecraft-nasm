@@ -18,7 +18,7 @@ wire_get_next_id:
     ret
 
 ; #[systemv]
-; fn wire_send_display_sync() -> u32 := usize
+; fn wire_send_display_sync() -> u32 := rax
 wire_send_display_sync:
     push r12
 
@@ -45,7 +45,7 @@ wire_send_display_sync:
     ret
 
 ; #[systemv]
-; fn wire_send_display_get_registry() -> u32 := usize
+; fn wire_send_display_get_registry() -> u32 := rax
 wire_send_display_get_registry:
     push r12
 
@@ -68,6 +68,66 @@ wire_send_display_get_registry:
     ; return id
     mov rax, r12
 
+    pop r12
+    ret
+
+; #[systemv]
+; fn wire_send_registry_bind(
+;     (name := rdi): u32,
+;     (version := rsi): u32,
+;     (interface := rdx:rcx): Str
+; ) -> u32 := rax
+wire_send_registry_bind:
+    push r12
+    push r13
+    push r14
+
+    ; let (name := r12) = name
+    mov r12, rdi
+
+    ; let (version := r14) = version
+    mov r14, rsi
+
+    ; let (interface := r10:r11) = interface
+    mov r10, rdx
+    mov r11, rcx
+
+    ; wire_begin_request(wire_id.wl_registry, wire_request.registry_bind_opcode)
+    mov rdi, wire_id.wl_registry
+    mov rsi, wire_request.registry_bind_opcode
+    call wire_begin_request
+
+    ; let (id := r13) = wire_get_next_id()
+    call wire_get_next_id
+    mov r13, rax
+
+    ; wire_write_uint(name)
+    mov rdi, r12
+    call wire_write_uint
+
+    ; // NewId { interface: str, version: u32, id: u32 }
+
+    ; wire_write_str(interface)
+    mov rdi, r10
+    mov rsi, r11
+    call wire_write_str
+
+    ; wire_write_uint(version)
+    mov rdi, r14
+    call wire_write_uint
+
+    ; wire_write_uint(id)
+    mov rdi, r13
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    ; return id
+    mov rax, r13
+
+    pop r14
+    pop r13
     pop r12
     ret
 

@@ -7,8 +7,11 @@
 %include "wire.s"
 
 section .rodata
-    display_error_string          db "wayland error: "
-    display_error_string.len      equ $-display_error_string
+    display_error_fmt.ptr         db "wayland error: WlDisplayError {{ ", \
+                                     "object_id: {usize}, ", \
+                                     "code: {usize}, ", \
+                                     "message: '{str}' }}", LF
+    display_error_fmt.len         equ $-display_error_fmt.ptr
 
     xdg_runtime_dir_str           db "XDG_RUNTIME_DIR"
     xdg_runtime_dir_str.len       equ $-xdg_runtime_dir_str
@@ -213,6 +216,64 @@ main:
     ; }
     jmp .loop
     .end_loop:
+
+    ; _ = wire_send_registry_bind(
+    ;     wl_compositor_global.name,
+    ;     wl_compositor_global.version,
+    ;     wl_compositor_global.interface)
+    xor rdi, rdi
+    xor rsi, rsi
+    mov edi, dword [wl_compositor_global + RegistryGlobal.name]
+    mov esi, dword [wl_compositor_global + RegistryGlobal.version]
+    mov rdx, qword [wl_compositor_global + RegistryGlobal.interface + Str.len]
+    mov rcx, qword [wl_compositor_global + RegistryGlobal.interface + Str.ptr]
+    call wire_send_registry_bind
+
+    ; let (callback_id := r12) = wire_send_display_sync()
+    call wire_send_display_sync
+    mov r12, rax
+
+    ; wire_flush(display_fd)
+    mov rdi, qword [display_fd]
+    call wire_flush
+
+    ; loop {
+    .loop2:
+        ; read_event()
+        call read_event
+
+        ; let (event_size := rdi) = message.size
+        movzx rdi, word [message + WireMessageHeader.size]
+
+        ; let (object_id := rdi) = message.object_id
+        xor rdi, rdi
+        mov edi, dword [message + WireMessageHeader.object_id]
+
+        ; let (opcode := rsi) = message.opcode
+        movzx rsi, word [message + WireMessageHeader.opcode]
+
+        ; let (event_id := rdi) = (object_id << 16) | opcode
+        shl rdi, 16
+        or rdi, rsi
+
+        ; // Got wl_display.error
+        ; if event_id == (wire_id.wl_display << 16) | wire_event.display_error_opcode
+        ; { handle_display_error() }
+        cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
+        je handle_display_error
+
+        ; // Got wl_callback.done
+        ; if event_id == (callback_id << 16) | wire_event.callback_done_opcode
+        ; { break }
+        mov rax, r12
+        shl rax, 16
+        or rax, wire_event.callback_done_opcode
+        cmp rdi, rax
+        je .end_loop2
+
+    ; }
+    jmp .loop2
+    .end_loop2:
 
     ; wl_compositor_global_args.name = wl_compositor_global.name as usize
     xor rax, rax
@@ -469,33 +530,62 @@ handle_registry_global:
 ; #[noreturn]
 ; fn handle_display_error()
 handle_display_error:
-    ; write(STDOUT, display_error_string, display_error_string.len)
+    push rbp
+    mov rbp, rsp
+
+    .fmt_args       equ -32
+
+    .object_id      equ .fmt_args
+    .code           equ .fmt_args + 8
+    .message.len    equ .fmt_args + 16
+    .message.ptr    equ .fmt_args + 24
+
+    .stack_size     equ ALIGNED(-.fmt_args)
+
+    ; let fmt_args: struct {
+    ;     object_id: usize,
+    ;     code: usize
+    ;     message: Str,
+    ; }
+    sub rsp, .stack_size
+
+    ; message.ptr = &message.body.message
+    mov qword [rbp + .message.ptr], \
+        message + WireMessageHeader.sizeof + DisplayErrorEvent.message
+
+    ; message.len = message.body.message.len as usize
+    xor rax, rax
+    mov eax, dword [message + WireMessageHeader.sizeof + DisplayErrorEvent.message.len]
+    mov qword [rbp + .message.len], rax
+
+    ; object_id = message.body.object_id
+    xor rax, rax
+    mov eax, dword [message + WireMessageHeader.sizeof + DisplayErrorEvent.object_id]
+    mov qword [rbp + .object_id], rax
+
+    ; code = message.body.code
+    xor rax, rax
+    mov eax, dword [message + WireMessageHeader.sizeof + DisplayErrorEvent.code]
+    mov qword [rbp + .code], rax
+
+    ; format_buffer.clear()
+    mov rdi, format_buffer
+    call String_clear
+
+    ; format_buffer.format_array(display_error_fmt, &fmt_args)
+    mov rdi, format_buffer
+    mov rsi, display_error_fmt.len
+    mov rdx, display_error_fmt.ptr
+    lea rcx, [rbp + .fmt_args]
+    call String_format_array
+
+    ; write(STDOUT, format_buffer.ptr, format_buffer.len)
     mov rax, SYSCALL_WRITE
     mov rdi, STDOUT
-    mov rsi, display_error_string
-    mov rdx, display_error_string.len
+    mov rsi, qword [format_buffer + String.ptr]
+    mov rdx, qword [format_buffer + String.len]
     syscall
-
-    ; let (error_message := rsi) = &message.body.message
-    mov rsi, message + WireMessageHeader.sizeof + DisplayErrorEvent.message
-
-    ; let (error_message_len := rdx) = message.body.message.len
-    xor rdx, rdx
-    mov edx, dword [message + WireMessageHeader.sizeof + DisplayErrorEvent.message.len]
-
-    ; write(STDOUT, error_message, error_message_len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    ; mov rsi, rsi
-    ; mov rdx, rdx
-    syscall
-
-    ; write(STDOUT, &newline, 1)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, newline
-    mov rdx, 1
-    syscall
+    call exit_on_error
 
     ; abort()
     jmp abort
