@@ -30,32 +30,6 @@ section .rodata
     wl_compositor_str.ptr db "wl_compositor"
     wl_compositor_str.len equ $-wl_compositor_str.ptr
 
-struc DisplayError
-    .object_id      resd 1
-    .code           resd 1
-    .message.len    resd 1
-    .message        resb 0
-    .sizeof         equ $-.object_id
-endstruc
-
-struc RegistryGlobalEvent
-    .name           resd 1
-    .interface.len  resd 1
-    .interface      resb 0
-    .version        resd 0
-    .sizeof         equ $-.name
-endstruc
-
-struc RegistryGlobal
-    ; name: u32
-    .name           resd 1
-    ; version: u32
-    .version        resd 1
-    ; interface: String
-    .interface      resb String.sizeof
-    .sizeof         equ $-.name
-endstruc
-
 section .bss
     ; pub static argc: usize
     global argc
@@ -93,6 +67,16 @@ section .bss
     wl_compositor_global resb RegistryGlobal.sizeof
 
     wl_compositor_global_args resq 4
+
+struc RegistryGlobal
+    ; name: u32
+    .name           resd 1
+    ; version: u32
+    .version        resd 1
+    ; interface: String
+    .interface      resb String.sizeof
+    .sizeof         equ $-.name
+endstruc
 
 section .text
 
@@ -174,33 +158,15 @@ main:
     syscall
     call exit_on_error
 
-    ; message.object_id = wire_id.wl_display
-    mov dword [message + WireMessage.object_id], wire_id.wl_display
+    ; _ = wire_send_display_get_registry()
+    call wire_send_display_get_registry
 
-    ; message.opcode = wire_request.get_registry_opcode
-    mov word [message + WireMessage.opcode], wire_request.display_get_registry_opcode
+    ; _ = wire_send_display_sync()
+    call wire_send_display_sync
 
-    ; message.size = WireMessage::HEADER_SIZE + 4
-    .message_size equ WireMessage.HEADER_SIZE + 4
-    mov word [message + WireMessage.size], .message_size
-
-    ; message.body.id = wire_id.wl_registry
-    mov dword [message + WireMessage.body + 0], wire_id.wl_registry
-
-    ; let (n_bytes := rax) = write(display_fd, &message, message.size)
-    mov rax, SYSCALL_WRITE
+    ; wire_flush(display_fd)
     mov rdi, qword [display_fd]
-    mov rsi, message
-    mov rdx, .message_size
-    syscall
-    call exit_on_error
-
-    ; assert n_bytes == message.size
-    cmp rax, .message_size
-    jne abort
-
-    ; send_sync()
-    call send_sync
+    call wire_flush
 
     ; loop {
     .loop:
@@ -208,14 +174,14 @@ main:
         call read_event
 
         ; let (event_size := rdi) = message.size
-        movzx rdi, word [message + WireMessage.size]
+        movzx rdi, word [message + WireMessageHeader.size]
 
         ; let (object_id := rdi) = message.object_id
         xor rdi, rdi
-        mov edi, dword [message + WireMessage.object_id]
+        mov edi, dword [message + WireMessageHeader.object_id]
 
         ; let (opcode := rsi) = message.opcode
-        movzx rsi, word [message + WireMessage.opcode]
+        movzx rsi, word [message + WireMessageHeader.opcode]
 
         ; let (event_id := rdi) = (object_id << 16) | opcode
         shl rdi, 16
@@ -436,12 +402,12 @@ handle_registry_global:
 
     ; fmt_args.name = message.body.name
     xor rax, rax
-    mov eax, dword [message + WireMessage.body + RegistryGlobalEvent.name]
+    mov eax, dword [message + WireMessageHeader.sizeof + RegistryGlobalEvent.name]
     mov qword [rbp + .fmt_args + GlobalFmtArgs.name], rax
 
     ; fmt_args.interface.len = message.body.interface.len - 1
     xor rax, rax
-    mov eax, dword [message + WireMessage.body + RegistryGlobalEvent.interface.len]
+    mov eax, dword [message + WireMessageHeader.sizeof + RegistryGlobalEvent.interface.len]
     dec rax
     mov qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.len], rax
 
@@ -450,7 +416,7 @@ handle_registry_global:
 
     ; fmt_args.interface.ptr = &message.body.interface
     mov qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.ptr], \
-        message + WireMessage.body + RegistryGlobalEvent.interface
+        message + WireMessageHeader.sizeof + RegistryGlobalEvent.interface
 
     ; let (string_block_size := r8) = (interface_len + 3) / 4
     add r8, 3
@@ -458,7 +424,7 @@ handle_registry_global:
 
     ; fmt_args.version = message.body.version
     xor rax, rax
-    mov eax, dword [message + WireMessage.body + RegistryGlobalEvent.sizeof + 4*r8]
+    mov eax, dword [message + WireMessageHeader.sizeof + RegistryGlobalEvent.sizeof + 4*r8]
     mov qword [rbp + .fmt_args + GlobalFmtArgs.version], rax
 
     ; let (interface_name := r12:r13) = fmt_args.interface
@@ -511,11 +477,11 @@ handle_display_error:
     syscall
 
     ; let (error_message := rsi) = &message.body.message
-    mov rsi, message + WireMessage.body + DisplayError.message
+    mov rsi, message + WireMessageHeader.sizeof + DisplayErrorEvent.message
 
     ; let (error_message_len := rdx) = message.body.message.len
     xor rdx, rdx
-    mov edx, dword [message + WireMessage.body + DisplayError.message.len]
+    mov edx, dword [message + WireMessageHeader.sizeof + DisplayErrorEvent.message.len]
 
     ; write(STDOUT, error_message, error_message_len)
     mov rax, SYSCALL_WRITE
@@ -537,64 +503,34 @@ handle_display_error:
 ; #[systemv]
 ; fn read_event()
 read_event:
-    ; let (n_read := rax) = read(display_fd, &message, WireMessage::HEADER_SIZE)
+    ; let (n_read := rax) = read(display_fd, &message, WireMessageHeader::HEADER_SIZE)
     mov rax, SYSCALL_READ
     mov rdi, qword [display_fd]
     mov rsi, message
-    mov rdx, WireMessage.HEADER_SIZE
+    mov rdx, WireMessageHeader.sizeof
     syscall
     call exit_on_error
 
-    ; assert n_read == WireMessage::HEADER_SIZE
-    cmp rax, WireMessage.HEADER_SIZE
+    ; assert n_read == WireMessageHeader::HEADER_SIZE
+    cmp rax, WireMessageHeader.sizeof
     jne abort
 
     ; let (body_size := rdx) = message.size
-    movzx rdx, word [message + WireMessage.size]
+    movzx rdx, word [message + WireMessageHeader.size]
 
-    ; body_size -= WireMessage::HEADER_SIZE
-    sub rdx, WireMessage.HEADER_SIZE
+    ; body_size -= WireMessageHeader::HEADER_SIZE
+    sub rdx, WireMessageHeader.sizeof
 
-    ; let (n_read := rax) = read(display_fd, &message + WireMessage::HEADER_SIZE, body_size)
+    ; let (n_read := rax) = read(display_fd, &message + WireMessageHeader::HEADER_SIZE, body_size)
     mov rax, SYSCALL_READ
     mov rdi, qword [display_fd]
-    mov rsi, message + WireMessage.HEADER_SIZE
+    mov rsi, message + WireMessageHeader.sizeof
     ; mov rdx, rdx
     syscall
     call exit_on_error
 
     ; assert n_read == body_size
     cmp rax, rdx
-    jne abort
-
-    ret
-
-; #[systemv]
-; fn send_sync()
-send_sync:
-    ; message.object_id = wire_id.wl_display
-    mov dword [message + WireMessage.object_id], wire_id.wl_display
-
-    ; message.opcode = wire_request.display_sync
-    mov word [message + WireMessage.opcode], wire_request.display_sync_opcode
-
-    ; message.size = WireMessage::HEADER_SIZE + 4
-    .message_size equ WireMessage.HEADER_SIZE + 4
-    mov word [message + WireMessage.size], .message_size
-
-    ; message.body.id = wire_id.wl_callback
-    mov dword [message + WireMessage.body + 0], wire_id.wl_callback
-
-    ; let (n_bytes := rax) = write(display_fd, &message, message.size)
-    mov rax, SYSCALL_WRITE
-    mov rdi, qword [display_fd]
-    mov rsi, message
-    mov rdx, .message_size
-    syscall
-    call exit_on_error
-
-    ; assert n_bytes == message.size
-    cmp rax, .message_size
     jne abort
 
     ret
