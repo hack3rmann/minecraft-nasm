@@ -164,8 +164,9 @@ main:
     ; _ = wire_send_display_get_registry()
     call wire_send_display_get_registry
 
-    ; _ = wire_send_display_sync()
+    ; let (callback_id := r12) = wire_send_display_sync()
     call wire_send_display_sync
+    mov r12, rax
 
     ; wire_flush(display_fd)
     mov rdi, qword [display_fd]
@@ -208,9 +209,12 @@ main:
         .end_if:
 
         ; // Got wl_callback.done
-        ; if event_id == (wire_id.wl_callback << 16) | wire_event.callback_done_opcode
+        ; if event_id == (callback_id << 16) | wire_event.callback_done_opcode
         ; { break }
-        cmp rdi, (wire_id.wl_callback << 16) | wire_event.callback_done_opcode
+        mov rax, r12
+        shl rax, 16
+        or rax, wire_event.callback_done_opcode
+        cmp rdi, rax
         je .end_loop
 
     ; }
