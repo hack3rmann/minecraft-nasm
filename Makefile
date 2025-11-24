@@ -32,6 +32,9 @@ $(BUILD)/$(EXEC_NAME): $(OBJS)
 	@$(LD) $(LD_FLAGS) $(OBJS) -o $(BUILD)/$(EXEC_NAME)
 
 .PHONY: clean
+.ONESHELL: clean
 clean:
+	@BUILD_SIZE=$$((du -h ./build 2>/dev/null || echo 0B) | tail -1 | rg '\d+\w' -o)
 	@echo -e "    $(GREEN)Cleaning$(NC) $(BUILD)"
 	@rm -rf $(BUILD)
+	@echo -e "     $(GREEN)Removed$(NC) $$BUILD_SIZE" 
