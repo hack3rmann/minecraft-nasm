@@ -140,16 +140,31 @@ wire_flush:
     ; let (display_fd := r12) = display_fd
     mov r12, rdi
 
-    ; let (n_bytes := rax) = write(display_fd, &wire_message_buffer, wire_message_buffer_len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, r12
-    mov rsi, wire_message_buffer
-    mov rdx, qword [wire_message_buffer_len]
-    syscall
+    ; if wire_message_n_fds == 0 {
+    cmp qword [wire_message_n_fds], 0
+    jne .else
 
-    ; assert n_bytes == wire_message_buffer_len
-    cmp rax, qword [wire_message_buffer_len]
-    jne abort
+        ; let (n_bytes := rax) = write(display_fd, &wire_message_buffer, wire_message_buffer_len)
+        mov rax, SYSCALL_WRITE
+        mov rdi, r12
+        mov rsi, wire_message_buffer
+        mov rdx, qword [wire_message_buffer_len]
+        syscall
+
+        ; assert n_bytes == wire_message_buffer_len
+        cmp rax, qword [wire_message_buffer_len]
+        jne abort
+
+    ; } else {
+    jmp .end_if
+    .else:
+
+        ; wire_flush_fds(display_fd)
+        mov rdi, r12
+        call wire_flush_fds
+
+    ; }
+    .end_if:
 
     ; wire_message_buffer_len = 0
     mov qword [wire_message_buffer_len], 0
@@ -157,8 +172,17 @@ wire_flush:
     ; wire_current_message_len = 0
     mov qword [wire_current_message_len], 0
 
+    ; wire_message_n_fds = 0
+    mov qword [wire_message_n_fds], 0
+
     pop r12
     ret
+
+; #[systemv]
+; fn wire_flush_fds((display_fd := rdi): Fd)
+wire_flush_fds:
+    DEBUG_STR_INLINE "wire_flush_fds is not yet implemented"
+    jmp abort
 
 ; #[fastcall(rax)]
 ; fn wire_write_uint((value := edi): u32)
@@ -174,6 +198,20 @@ wire_write_uint:
 
     ; wire_current_message_len += 4
     add qword [wire_current_message_len], 4
+
+    ret
+
+; #[fastcall(rax)]
+; fn wire_write_fd((fd := edi): Fd)
+wire_write_fd:
+    ; let (n_fds := rax) = wire_message_n_fds
+    mov rax, qword [wire_message_n_fds]
+
+    ; wire_message_fds[n_fds] = fd
+    mov dword [wire_message_fds + 4*rax], edi
+
+    ; wire_message_n_fds += 1
+    inc qword [wire_message_n_fds]
 
     ret
 
@@ -223,6 +261,9 @@ wire_write_str:
 wire_begin_request:
     ; wire_current_message_len = sizeof(WireMessageHeader)
     mov qword [wire_current_message_len], WireMessageHeader.sizeof
+
+    ; wire_message_n_fds = 0
+    mov qword [wire_message_n_fds], 0
 
     ; let (message := rax): *mut WireMessageHeader
     ;     = &wire_message_buffer + wire_message_buffer_len

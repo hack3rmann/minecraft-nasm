@@ -1,7 +1,8 @@
 %ifndef _WIRE_INC
 %define _WIRE_INC
 
-%define MESSAGE_BUFFER_SIZE (4 * 64)
+%define WIRE_MESSAGE_BUFFER_SIZE (4 * 64)
+%define WIRE_MESSAGE_MAX_N_FDS   64
 
 section .data
     wire_last_id  dq 1
@@ -30,8 +31,14 @@ section .bss
     ; static wire_current_message_len: usize
     wire_current_message_len              resq 1
 
-    ; static wire_message_buffer: [u8; MESSAGE_BUFFER_SIZE]
-    wire_message_buffer                   resb MESSAGE_BUFFER_SIZE
+    ; static wire_message_buffer: [u8; WIRE_MESSAGE_BUFFER_SIZE]
+    wire_message_buffer                   resb WIRE_MESSAGE_BUFFER_SIZE
+
+    ; static wire_message_n_fds: usize
+    wire_message_n_fds                    resq 1
+
+    ; static wire_message_fds: [u32; WIRE_MESSAGE_MAX_N_FDS]
+    wire_message_fds                      resd WIRE_MESSAGE_MAX_N_FDS
 
 struc WireMessageHeader
     ; object_id: u32
@@ -70,7 +77,7 @@ struc RegistryGlobal
 endstruc
 
 extern wire_flush, wire_get_next_id, wire_write_uint, wire_write_str, \
-       wire_begin_request, wire_end_request
+       wire_begin_request, wire_end_request, wire_write_fd, wire_flush_fds
 
 extern wire_send_display_sync, wire_send_display_get_registry
 

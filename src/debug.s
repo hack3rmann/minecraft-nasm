@@ -75,6 +75,20 @@
     POPA
 %endmacro
 
+%macro DEBUG_STR_INLINE 1
+%push
+%push
+    section .rodata
+        %$str     db %1, LF
+        %$str.len equ $ - %$str
+
+    section .text
+
+    DEBUG_STR %$str.len, %$str
+%pop
+%pop
+%endmacro
+
 STDIN                        equ 0
 STDOUT                       equ 1
 STDERR                       equ 2

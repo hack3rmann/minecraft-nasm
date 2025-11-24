@@ -55,4 +55,28 @@ O_RDWR                       equ 2
 O_CREAT                      equ 64
 O_EXCL                       equ 128
 
+struc msghdr
+    ; msg_name: *mut ()       // Optional address
+    .msg_name                 resq 1
+    ; msg_name_len: u32       // Size of address
+    .msg_name_len             resq 1
+    ; msg_iov: *mut iovec     // Scatter/gather array
+    .msg_iov                  resq 1
+    ; msg_iovlen: usize       // # elements in `msg_iov`
+    .msg_iovlen               resq 1
+    ; msg_control: *mut ()    // Ancilliary data
+    .msg_control              resq 1
+    ; msg_controllen: usize   // Ancilliary data buffer len
+    .msg_controllen           resq 1
+    ; msg_flags: u32          // Flags (unused)
+    .msg_flags                resq 1
+endstruc
+
+struc iovec
+    ; iov_base: *mut ()       // Starting address
+    .iov_base                 resq 1
+    ; iov_len: usize          // Size of the memory pointed to by iov_base.
+    .iov_len                  resq 1
+endstruc
+
 %endif ; !_SYSCALL_INC
