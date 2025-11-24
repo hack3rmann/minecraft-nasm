@@ -10,13 +10,14 @@ section .bss
     wire_id:
         .wl_display                       equ 1
         .wl_registry                      equ 2
-        .wl_callback                      equ 3
 
     wire_request:
         .display_sync_opcode              equ 0
         .display_get_registry_opcode      equ 1
 
         .registry_bind_opcode             equ 0
+
+        .compositor_create_surface_opcode equ 0
 
     wire_event:
         .display_error_opcode             equ 0
@@ -58,11 +59,23 @@ struc RegistryGlobalEvent
     .sizeof         equ $-.name
 endstruc
 
+struc RegistryGlobal
+    ; name: u32
+    .name           resd 1
+    ; version: u32
+    .version        resd 1
+    ; interface: String
+    .interface      resb String.sizeof
+    .sizeof         equ $-.name
+endstruc
+
 extern wire_flush, wire_get_next_id, wire_write_uint, wire_write_str, \
        wire_begin_request, wire_end_request
 
 extern wire_send_display_sync, wire_send_display_get_registry
 
-extern wire_send_registry_bind
+extern wire_send_registry_bind, wire_send_registry_bind_global
+
+extern wire_send_compositor_create_surface
 
 %endif ; !_WIRE_INC

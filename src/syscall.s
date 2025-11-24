@@ -3,14 +3,21 @@
 
 SYSCALL_READ                 equ 0
 SYSCALL_WRITE                equ 1
+SYSCALL_OPEN                 equ 2
 SYSCALL_CLOSE                equ 3
 SYSCALL_MMAP                 equ 9
 SYSCALL_MUNMAP               equ 11
+SYSCALL_SHMGET               equ 29
+SYSCALL_SHMAT                equ 30
+SYSCALL_SHMCTL               equ 31
 SYSCALL_GETPID               equ 39
 SYSCALL_SOCKET               equ 41
 SYSCALL_CONNECT              equ 42
 SYSCALL_EXIT                 equ 60
 SYSCALL_KILL                 equ 62
+SYSCALL_SHMDT                equ 67
+SYSCALL_FTRUNCATE            equ 77
+SYSCALL_UNLINK               equ 87
 SYSCALL_GETUID               equ 102
 
 AF_UNIX                      equ 1
@@ -28,5 +35,24 @@ SIGSEGV                      equ 11
 SIGPIPE                      equ 13
 SIGALRM                      equ 14
 SIGTERM                      equ 15
+
+IPC_PRIVATE                  equ 0
+IPC_CREAT                    equ 0o1000
+IPC_EXCL                     equ 0o2000
+IPC_NOWAIT                   equ 0o4000
+
+IPC_RMID                     equ 0
+IPC_SET                      equ 1
+IPC_STAT                     equ 2
+IPC_INFO                     equ 3
+MSG_STAT                     equ 11
+MSG_INFO                     equ 12
+MSG_NOTIFICATION             equ 0x8000
+
+O_RDONLY                     equ 0
+O_WRONLY                     equ 1
+O_RDWR                       equ 2
+O_CREAT                      equ 64
+O_EXCL                       equ 128
 
 %endif ; !_SYSCALL_INC

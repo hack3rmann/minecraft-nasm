@@ -33,6 +33,14 @@ section .rodata
     wl_compositor_str.ptr db "wl_compositor"
     wl_compositor_str.len equ $-wl_compositor_str.ptr
 
+    wl_shm_str.ptr        db "wl_shm"
+    wl_shm_str.len        equ $-wl_shm_str.ptr
+
+    dev_shm_path.ptr      db "/dev/shm/minecraft", 0
+    dev_shm_path.len      equ $-dev_shm_path.ptr-1
+
+    shm_size              equ 4096
+
 section .bss
     ; pub static argc: usize
     global argc
@@ -69,17 +77,26 @@ section .bss
     ; static wl_compositor_global: RegistryGlobal
     wl_compositor_global resb RegistryGlobal.sizeof
 
-    wl_compositor_global_args resq 4
+    ; static wl_shm_global: RegistryGlobal
+    wl_shm_global resb RegistryGlobal.sizeof
 
-struc RegistryGlobal
-    ; name: u32
-    .name           resd 1
-    ; version: u32
-    .version        resd 1
-    ; interface: String
-    .interface      resb String.sizeof
-    .sizeof         equ $-.name
-endstruc
+    ; static wl_compositor_id: u32
+    wl_compositor_id resq 1
+
+    ; static wl_shm_id: u32
+    wl_shm_id resq 1
+
+    ; static shm_id: key_t
+    shm_id resq 1
+
+    ; static shm_fd: Fd
+    shm_fd resq 1
+
+    ; static shm_ptr: *mut u8
+    shm_ptr resq 1
+
+    ; static wl_surface_id: u32
+    wl_surface_id resq 1
 
 section .text
 
@@ -126,6 +143,10 @@ main:
     mov rdi, wl_compositor_global
     call RegistryGlobal_new
 
+    ; wl_shm_global = RegistryGlobal::new()
+    mov rdi, wl_shm_global
+    call RegistryGlobal_new
+
     ; socket_path = get_wayland_socket_path()
     mov rdi, socket_path
     call get_wayland_socket_path
@@ -160,6 +181,53 @@ main:
     add rdx, 2
     syscall
     call exit_on_error
+
+    ; shm_fd = open(dev_shm_path.ptr, O_CREAT | O_RDWR | O_EXCL, 0o600)
+    mov rax, SYSCALL_OPEN
+    mov rdi, dev_shm_path.ptr
+    mov rsi, O_CREAT | O_RDWR | O_EXCL
+    mov rdx, 0o600
+    syscall
+    call exit_on_error
+    mov qword [shm_fd], rax
+
+    ; ftruncate(shm_fd, shm_size)
+    mov rax, SYSCALL_FTRUNCATE
+    mov rdi, qword [shm_fd]
+    mov rsi, shm_size
+    syscall
+    call exit_on_error
+
+    ; unlink(dev_shm_path.ptr)
+    mov rax, SYSCALL_UNLINK
+    mov rdi, dev_shm_path.ptr
+    syscall
+    call exit_on_error
+
+    ; shm_ptr = mmap(
+    ;     null,
+    ;     shm_size,
+    ;     PROT_READ | PROT_WRITE,
+    ;     MAP_SHARED,
+    ;     shm_fd,
+    ;     0)
+    mov rax, SYSCALL_MMAP
+    xor rdi, rdi
+    mov rsi, shm_size
+    mov rdx, PROT_READ | PROT_WRITE
+    mov rcx, MAP_SHARED
+    mov r8, qword [shm_fd]
+    xor r9, r9
+    syscall
+    mov qword [shm_ptr], rax
+
+    ; assert shm_ptr != MMAP_FAILED
+    cmp qword [shm_ptr], MAP_FAILED
+    je abort
+
+    ; assert shm_ptr != null
+    cmp qword [shm_ptr], 0
+    je abort
 
     ; _ = wire_send_display_get_registry()
     call wire_send_display_get_registry
@@ -221,17 +289,15 @@ main:
     jmp .loop
     .end_loop:
 
-    ; _ = wire_send_registry_bind(
-    ;     wl_compositor_global.name,
-    ;     wl_compositor_global.version,
-    ;     wl_compositor_global.interface)
-    xor rdi, rdi
-    xor rsi, rsi
-    mov edi, dword [wl_compositor_global + RegistryGlobal.name]
-    mov esi, dword [wl_compositor_global + RegistryGlobal.version]
-    mov rdx, qword [wl_compositor_global + RegistryGlobal.interface + Str.len]
-    mov rcx, qword [wl_compositor_global + RegistryGlobal.interface + Str.ptr]
-    call wire_send_registry_bind
+    ; wl_compositor_id = wire_send_registry_bind_global(&wl_compositor_global)
+    mov rdi, wl_compositor_global
+    call wire_send_registry_bind_global
+    mov qword [wl_compositor_id], rax
+
+    ; wl_shm_id = wire_send_registry_bind_global(&wl_shm_global)
+    mov rdi, wl_shm_global
+    call wire_send_registry_bind_global
+    mov qword [wl_shm_id], rax
 
     ; let (callback_id := r12) = wire_send_display_sync()
     call wire_send_display_sync
@@ -279,38 +345,67 @@ main:
     jmp .loop2
     .end_loop2:
 
-    ; wl_compositor_global_args.name = wl_compositor_global.name as usize
-    xor rax, rax
-    mov eax, dword [wl_compositor_global + RegistryGlobal.name]
-    mov qword [wl_compositor_global_args + 0], rax
+    ; wl_surface_id = wire_send_compositor_create_surface(wl_compositor_id)
+    mov rdi, qword [wl_compositor_id]
+    call wire_send_compositor_create_surface
+    mov qword [wl_surface_id], rax
 
-    ; wl_compositor_global_args.interface = wl_compositor_global.interface
-    mov rax, qword [wl_compositor_global + RegistryGlobal.interface + Str.len]
-    mov qword [wl_compositor_global_args + 8], rax
-    mov rax, qword [wl_compositor_global + RegistryGlobal.interface + Str.ptr]
-    mov qword [wl_compositor_global_args + 16], rax
+    ; let (callback_id := r12) = wire_send_display_sync()
+    call wire_send_display_sync
+    mov r12, rax
 
-    ; wl_compositor_global_args.version = wl_compositor_global.version as usize
-    xor rax, rax
-    mov eax, dword [wl_compositor_global + RegistryGlobal.version]
-    mov qword [wl_compositor_global_args + 24], rax
+    ; wire_flush(display_fd)
+    mov rdi, qword [display_fd]
+    call wire_flush
 
-    ; format_buffer.clear()
-    mov rdi, format_buffer
-    call String_clear
+    ; loop {
+    .loop3:
+        ; read_event()
+        call read_event
 
-    ; format_buffer.format_array(global_fmt, &wl_compositor_global_args)
-    mov rdi, format_buffer
-    mov rsi, global_fmt.len
-    mov rdx, global_fmt
-    mov rcx, wl_compositor_global_args
-    call String_format_array
+        ; let (event_size := rdi) = message.size
+        movzx rdi, word [message + WireMessageHeader.size]
 
-    ; write(STDOUT, format_buffer.ptr, format_buffer.len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, qword [format_buffer + String.ptr]
-    mov rdx, qword [format_buffer + String.len]
+        ; let (object_id := rdi) = message.object_id
+        xor rdi, rdi
+        mov edi, dword [message + WireMessageHeader.object_id]
+
+        ; let (opcode := rsi) = message.opcode
+        movzx rsi, word [message + WireMessageHeader.opcode]
+
+        ; let (event_id := rdi) = (object_id << 16) | opcode
+        shl rdi, 16
+        or rdi, rsi
+
+        ; // Got wl_display.error
+        ; if event_id == (wire_id.wl_display << 16) | wire_event.display_error_opcode
+        ; { handle_display_error() }
+        cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
+        je handle_display_error
+
+        ; // Got wl_callback.done
+        ; if event_id == (callback_id << 16) | wire_event.callback_done_opcode
+        ; { break }
+        mov rax, r12
+        shl rax, 16
+        or rax, wire_event.callback_done_opcode
+        cmp rdi, rax
+        je .end_loop3
+
+    ; }
+    jmp .loop3
+    .end_loop3:
+
+    ; munmap(shm_ptr, shm_size)
+    mov rax, SYSCALL_MUNMAP
+    mov rdi, qword [shm_ptr]
+    mov rsi, shm_size
+    syscall
+    call exit_on_error
+
+    ; close(shm_fd)
+    mov rax, SYSCALL_CLOSE
+    mov rdi, qword [shm_fd]
     syscall
     call exit_on_error
 
@@ -323,6 +418,10 @@ main:
     ; drop(socket_path)
     mov rdi, socket_path
     call String_drop
+
+    ; drop(wl_shm_global)
+    mov rdi, wl_shm_global
+    call RegistryGlobal_drop
 
     ; drop(wl_compositor_global)
     mov rdi, wl_compositor_global
@@ -504,7 +603,7 @@ handle_registry_global:
     call Str_eq
     test al, al
     movzx rax, al
-    jz .end_if_name
+    jz .else_if_name
 
         ; wl_compositor_global.name = fmt_args.name as u32
         mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.name]
@@ -519,6 +618,32 @@ handle_registry_global:
         ; wl_compositor_global.version = fmt_args.version as u32
         mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.version]
         mov dword [wl_compositor_global + RegistryGlobal.version], eax
+
+    ; } else if interface_name == "wl_shm" {
+    jmp .end_if_name
+    .else_if_name:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, wl_shm_str.len
+    mov rcx, wl_shm_str.ptr
+    call Str_eq
+    test al, al
+    movzx rax, al
+    jz .end_if_name
+
+        ; wl_shm_global.name = fmt_args.name as u32
+        mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.name]
+        mov dword [wl_shm_global + RegistryGlobal.name], eax
+
+        ; wl_shm_global.interface.push_str(fmt_args.interface)
+        mov rdi, wl_shm_global + RegistryGlobal.interface
+        mov rsi, r12
+        mov rdx, r13
+        call String_push_str
+
+        ; wl_shm_global.version = fmt_args.version as u32
+        mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.version]
+        mov dword [wl_shm_global + RegistryGlobal.version], eax
 
     ; }
     .end_if_name:

@@ -3,6 +3,7 @@
 %include "../error.s"
 %include "../memory.s"
 %include "../debug.s"
+%include "../string.s"
 
 section .text
 
@@ -257,4 +258,58 @@ wire_end_request:
     ; header_ptr->size = wire_current_message_len
     mov word [rax + WireMessageHeader.size], di
 
+    ret
+
+; #[systemv]
+; fn wire_send_compositor_create_surface((compositor_id := rdi): u32) -> u32 := rax
+wire_send_compositor_create_surface:
+    push r12
+    push r13
+
+    ; let (compositor_id := r12) = compositor_id
+    mov r12, rdi
+
+    ; wire_begin_request(compositor_id, wire_request.compositor_create_surface_opcode)
+    mov rdi, r12
+    mov rsi, wire_request.compositor_create_surface_opcode
+    call wire_begin_request
+
+    ; let (id := r13) = wire_get_next_id()
+    call wire_get_next_id
+    mov r13, rax
+
+    ; wire_write_uint(id)
+    mov rdi, r13
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    ; return id
+    mov rax, r13
+
+    pop r13
+    pop r12
+    ret
+
+; #[systemv]
+; fn wire_send_registry_bind_global((global := rdi): &RegistryGlobal) -> u32 := rax
+wire_send_registry_bind_global:
+    push r12
+    push r13
+
+    ; let (global := r12) = global
+    mov r12, rdi
+
+    ; return wire_send_registry_bind(global.name, global.version, global.interface)
+    xor rdi, rdi
+    xor rsi, rsi
+    mov edi, dword [r12 + RegistryGlobal.name]
+    mov esi, dword [r12 + RegistryGlobal.version]
+    mov rdx, qword [r12 + RegistryGlobal.interface + Str.len]
+    mov rcx, qword [r12 + RegistryGlobal.interface + Str.ptr]
+    call wire_send_registry_bind
+
+    pop r13
+    pop r12
     ret
