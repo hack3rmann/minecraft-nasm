@@ -86,6 +86,9 @@ section .bss
     ; static wl_shm_id: u32
     wl_shm_id resq 1
 
+    ; static wl_shm_pool_id: u32
+    wl_shm_pool_id resq 1
+
     ; static shm_id: key_t
     shm_id resq 1
 
@@ -349,6 +352,13 @@ main:
     mov rdi, qword [wl_compositor_id]
     call wire_send_compositor_create_surface
     mov qword [wl_surface_id], rax
+
+    ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm_fd, shm_size)
+    mov rdi, qword [wl_shm_id]
+    mov rsi, qword [shm_fd]
+    mov rdx, shm_size
+    call wire_send_shm_create_pool
+    mov qword [wl_shm_pool_id], rax
 
     ; let (callback_id := r12) = wire_send_display_sync()
     call wire_send_display_sync

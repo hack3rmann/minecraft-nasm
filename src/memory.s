@@ -29,6 +29,6 @@ MAP_FIXED       equ 0x0010
 
 %define ALIGNED(n_bytes) (n_bytes + (8 - (n_bytes % 8)) % 8)
 
-extern alloc, dealloc, realloc, copy
+extern alloc, dealloc, realloc, copy, set
 
 %endif ; !_MEMORY_INC

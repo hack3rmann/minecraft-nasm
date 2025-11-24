@@ -83,8 +83,7 @@
         %$str.len equ $ - %$str
 
     section .text
-
-    DEBUG_STR %$str.len, %$str
+        DEBUG_STR %$str.len, %$str
 %pop
 %pop
 %endmacro

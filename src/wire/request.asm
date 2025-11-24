@@ -179,10 +179,77 @@ wire_flush:
     ret
 
 ; #[systemv]
+; #[private]
 ; fn wire_flush_fds((display_fd := rdi): Fd)
 wire_flush_fds:
-    DEBUG_STR_INLINE "wire_flush_fds is not yet implemented"
-    jmp abort
+    push r12
+    push rbp
+    mov rbp, rsp
+
+    .io                   equ -iovec.sizeof
+    .msg                  equ -msghdr.sizeof + .io
+    .stack_size           equ ALIGNED(-.msg)
+
+    ; let msg: msghdr
+    ; let io: iovec
+    sub rsp, .stack_size
+
+    ; let (display_fd := r12) = display_fd
+    mov r12, rdi
+
+    ; set(&msg, 0, sizeof(msg))
+    lea rdi, [rbp + .msg]
+    xor rsi, rsi
+    mov rdx, msghdr.sizeof
+    call set
+
+    ; io.iov_base = &wire_message_buffer
+    mov qword [rbp + .io + iovec.iov_base], wire_message_buffer
+
+    ; io.iov_len = wire_message_buffer_len
+    mov rax, qword [wire_message_buffer_len]
+    mov qword [rbp + .io + iovec.iov_len], rax
+
+    ; msg.msg_iov = &io
+    lea rax, [rbp + .io]
+    mov qword [rbp + .msg + msghdr.msg_iov], rax
+
+    ; msg.msg_iovlen = 1
+    mov qword [rbp + .msg + msghdr.msg_iovlen], 1
+
+    ; msg.msg_control = &wire_message_fds_header
+    mov qword [rbp + .msg + msghdr.msg_control], wire_message_fds_header
+
+    ; msg.msg_controllen = (sizeof(cmsghdr) + sizeof(Fd) * wire_message_n_fds + 7) & ~7
+    mov rax, qword [wire_message_n_fds]
+    lea rax, [cmsghdr.sizeof + 4*rax + 7]
+    and rax, 0xFFFFFFFFFFFFFFFF - 7
+    mov qword [rbp + .msg + msghdr.msg_controllen], rax
+
+    ; wire_message_fds_header.cmsg_len = sizeof(cmsghdr) + sizeof(Fd) * wire_message_n_fds
+    mov rax, qword [wire_message_n_fds]
+    lea rax, [cmsghdr.sizeof + 4*rax]
+    mov qword [wire_message_fds_header + cmsghdr.cmsg_len], rax
+
+    ; wire_message_fds_header.cmsg_level = SOL_SOCKET
+    mov dword [wire_message_fds_header + cmsghdr.cmsg_level], SOL_SOCKET
+
+    ; wire_message_fds_header.cmsg_type = SCM_RIGHTS
+    mov dword [wire_message_fds_header + cmsghdr.cmsg_type], SCM_RIGHTS
+
+    ; sendmsg(display_fd, &msg, 0)
+    mov rax, SYSCALL_SENDMSG
+    mov rdi, r12
+    lea rsi, [rbp + .msg]
+    xor rdx, rdx
+    syscall
+    call exit_on_error
+
+    add rsp, .stack_size
+
+    pop rbp
+    pop r12
+    ret
 
 ; #[fastcall(rax)]
 ; fn wire_write_uint((value := edi): u32)
@@ -261,9 +328,6 @@ wire_write_str:
 wire_begin_request:
     ; wire_current_message_len = sizeof(WireMessageHeader)
     mov qword [wire_current_message_len], WireMessageHeader.sizeof
-
-    ; wire_message_n_fds = 0
-    mov qword [wire_message_n_fds], 0
 
     ; let (message := rax): *mut WireMessageHeader
     ;     = &wire_message_buffer + wire_message_buffer_len
@@ -351,6 +415,60 @@ wire_send_registry_bind_global:
     mov rcx, qword [r12 + RegistryGlobal.interface + Str.ptr]
     call wire_send_registry_bind
 
+    pop r13
+    pop r12
+    ret
+
+; #[systemv]
+; fn wire_send_shm_create_pool(
+;     (shm_id := rdi): u32,
+;     (fd := rsi): u32,
+;     (size := rdx): u32
+; ) -> u32 := rax
+wire_send_shm_create_pool:
+    push r12
+    push r13
+    push r14
+    push r15
+
+    ; let (shm_id := r12) = shm_id
+    mov r12, rdi
+
+    ; let (fd := r13) = fd
+    mov r13, rsi
+
+    ; let (size := r14) = size
+    mov r14, rdx
+
+    ; wire_begin_request(shm, wire_request.shm_create_pool_opcode)
+    mov rdi, r12
+    mov rsi, wire_request.shm_create_pool_opcode
+    call wire_begin_request
+
+    ; let (id := r15) = wire_get_next_id()
+    call wire_get_next_id
+    mov r15, rax
+
+    ; wire_write_uint(id)
+    mov rdi, r15
+    call wire_write_uint
+
+    ; wire_write_fd(fd)
+    mov rdi, r13
+    call wire_write_fd
+
+    ; wire_write_uint(size)
+    mov rdi, r14
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    ; return id
+    mov rax, r15
+
+    pop r15
+    pop r14
     pop r13
     pop r12
     ret

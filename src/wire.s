@@ -20,6 +20,8 @@ section .bss
 
         .compositor_create_surface_opcode equ 0
 
+        .shm_create_pool_opcode           equ 0
+
     wire_event:
         .display_error_opcode             equ 0
         .callback_done_opcode             equ 0
@@ -36,6 +38,10 @@ section .bss
 
     ; static wire_message_n_fds: usize
     wire_message_n_fds                    resq 1
+
+    ; static wire_message_fds_header: cmsghdr
+                                          align 8
+    wire_message_fds_header               resb cmsghdr.sizeof
 
     ; static wire_message_fds: [u32; WIRE_MESSAGE_MAX_N_FDS]
     wire_message_fds                      resd WIRE_MESSAGE_MAX_N_FDS
@@ -77,12 +83,14 @@ struc RegistryGlobal
 endstruc
 
 extern wire_flush, wire_get_next_id, wire_write_uint, wire_write_str, \
-       wire_begin_request, wire_end_request, wire_write_fd, wire_flush_fds
+       wire_begin_request, wire_end_request, wire_write_fd
 
 extern wire_send_display_sync, wire_send_display_get_registry
 
 extern wire_send_registry_bind, wire_send_registry_bind_global
 
 extern wire_send_compositor_create_surface
+
+extern wire_send_shm_create_pool
 
 %endif ; !_WIRE_INC

@@ -13,6 +13,7 @@ SYSCALL_SHMCTL               equ 31
 SYSCALL_GETPID               equ 39
 SYSCALL_SOCKET               equ 41
 SYSCALL_CONNECT              equ 42
+SYSCALL_SENDMSG              equ 46
 SYSCALL_EXIT                 equ 60
 SYSCALL_KILL                 equ 62
 SYSCALL_SHMDT                equ 67
@@ -55,6 +56,9 @@ O_RDWR                       equ 2
 O_CREAT                      equ 64
 O_EXCL                       equ 128
 
+SOL_SOCKET                   equ 1
+SCM_RIGHTS                   equ 1
+
 struc msghdr
     ; msg_name: *mut ()       // Optional address
     .msg_name                 resq 1
@@ -70,6 +74,17 @@ struc msghdr
     .msg_controllen           resq 1
     ; msg_flags: u32          // Flags (unused)
     .msg_flags                resq 1
+    .sizeof                   equ $-.msg_name
+endstruc
+
+struc cmsghdr
+    ; cmsg_len: usize
+    .cmsg_len                 resq 1
+    ; cmsg_level: u32
+    .cmsg_level               resd 1
+    ; cmsg_type: u32
+    .cmsg_type                resd 1
+    .sizeof                   equ $-.cmsg_len
 endstruc
 
 struc iovec
@@ -77,6 +92,7 @@ struc iovec
     .iov_base                 resq 1
     ; iov_len: usize          // Size of the memory pointed to by iov_base.
     .iov_len                  resq 1
+    .sizeof                   resq $-.iov_base
 endstruc
 
 %endif ; !_SYSCALL_INC
