@@ -13,6 +13,9 @@ section .rodata
                                      "message: '{str}' }}", LF
     display_error_fmt.len         equ $-display_error_fmt.ptr
 
+    minecraft_str.ptr             db "Minecraft"
+    minecraft_str.len             equ $-minecraft_str.ptr
+
     xdg_runtime_dir_str           db "XDG_RUNTIME_DIR"
     xdg_runtime_dir_str.len       equ $-xdg_runtime_dir_str
     wayland_display_str           db "WAYLAND_DISPLAY"
@@ -36,10 +39,13 @@ section .rodata
     wl_shm_str.ptr        db "wl_shm"
     wl_shm_str.len        equ $-wl_shm_str.ptr
 
+    xdg_wm_base_str.ptr   db "xdg_wm_base"
+    xdg_wm_base_str.len   equ $-xdg_wm_base_str.ptr
+
     dev_shm_path.ptr      db "/dev/shm/minecraft", 0
     dev_shm_path.len      equ $-dev_shm_path.ptr-1
 
-    shm_size              equ 4096
+    shm_size              equ 640*480*4
 
 section .bss
     ; pub static argc: usize
@@ -80,6 +86,9 @@ section .bss
     ; static wl_shm_global: RegistryGlobal
     wl_shm_global resb RegistryGlobal.sizeof
 
+    ; static xdg_wm_base_global: RegistryGlobal
+    xdg_wm_base_global resb RegistryGlobal.sizeof
+
     ; static wl_compositor_id: u32
     wl_compositor_id resq 1
 
@@ -100,6 +109,18 @@ section .bss
 
     ; static wl_surface_id: u32
     wl_surface_id resq 1
+
+    ; static wl_buffer_id: u32
+    wl_buffer_id resq 1
+
+    ; static xdg_wm_base_id: u32
+    xdg_wm_base_id resq 1
+
+    ; static xdg_surface_id: u32
+    xdg_surface_id resq 1
+
+    ; static xdg_toplevel_id: u32
+    xdg_toplevel_id resq 1
 
 section .text
 
@@ -148,6 +169,10 @@ main:
 
     ; wl_shm_global = RegistryGlobal::new()
     mov rdi, wl_shm_global
+    call RegistryGlobal_new
+
+    ; xdg_wm_base_global = RegistryGlobal::new()
+    mov rdi, xdg_wm_base_global
     call RegistryGlobal_new
 
     ; socket_path = get_wayland_socket_path()
@@ -302,56 +327,36 @@ main:
     call wire_send_registry_bind_global
     mov qword [wl_shm_id], rax
 
-    ; let (callback_id := r12) = wire_send_display_sync()
-    call wire_send_display_sync
-    mov r12, rax
-
-    ; wire_flush(display_fd)
-    mov rdi, qword [display_fd]
-    call wire_flush
-
-    ; loop {
-    .loop2:
-        ; read_event()
-        call read_event
-
-        ; let (event_size := rdi) = message.size
-        movzx rdi, word [message + WireMessageHeader.size]
-
-        ; let (object_id := rdi) = message.object_id
-        xor rdi, rdi
-        mov edi, dword [message + WireMessageHeader.object_id]
-
-        ; let (opcode := rsi) = message.opcode
-        movzx rsi, word [message + WireMessageHeader.opcode]
-
-        ; let (event_id := rdi) = (object_id << 16) | opcode
-        shl rdi, 16
-        or rdi, rsi
-
-        ; // Got wl_display.error
-        ; if event_id == (wire_id.wl_display << 16) | wire_event.display_error_opcode
-        ; { handle_display_error() }
-        cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
-        je handle_display_error
-
-        ; // Got wl_callback.done
-        ; if event_id == (callback_id << 16) | wire_event.callback_done_opcode
-        ; { break }
-        mov rax, r12
-        shl rax, 16
-        or rax, wire_event.callback_done_opcode
-        cmp rdi, rax
-        je .end_loop2
-
-    ; }
-    jmp .loop2
-    .end_loop2:
+    ; xdg_wm_base_id = wire_send_registry_bind_global(&xdg_wm_base_global)
+    mov rdi, xdg_wm_base_global
+    call wire_send_registry_bind_global
+    mov qword [xdg_wm_base_id], rax
 
     ; wl_surface_id = wire_send_compositor_create_surface(wl_compositor_id)
     mov rdi, qword [wl_compositor_id]
     call wire_send_compositor_create_surface
     mov qword [wl_surface_id], rax
+
+    ; xdg_surface_id = wire_send_wm_base_get_xdg_surface(xdg_wm_base_id, wl_surface_id)
+    mov rdi, qword [xdg_wm_base_id]
+    mov rsi, qword [wl_surface_id]
+    call wire_send_wm_base_get_xdg_surface
+    mov qword [xdg_surface_id], rax
+
+    ; xdg_toplevel_id = wire_send_xdg_surface_get_toplevel(xdg_surface_id)
+    mov rdi, qword [xdg_surface_id]
+    call wire_send_xdg_surface_get_toplevel
+    mov qword [xdg_toplevel_id], rax
+
+    ; wire_send_surface_commit(wl_surface_id)
+    mov rdi, qword [wl_surface_id]
+    call wire_send_surface_commit
+
+    ; wire_send_xdg_toplevel_set_title(xdg_toplevel_id, "Minecraft")
+    mov rdi, qword [xdg_toplevel_id]
+    mov rsi, minecraft_str.len
+    mov rdx, minecraft_str.ptr
+    call wire_send_xdg_toplevel_set_title
 
     ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm_fd, shm_size)
     mov rdi, qword [wl_shm_id]
@@ -360,51 +365,92 @@ main:
     call wire_send_shm_create_pool
     mov qword [wl_shm_pool_id], rax
 
-    ; let (callback_id := r12) = wire_send_display_sync()
-    call wire_send_display_sync
-    mov r12, rax
+    ; wl_buffer_id = wire_send_shm_pool_create_buffer(
+    ;     wl_shm_pool_id,
+    ;     offset = 0,
+    ;     width = 640,
+    ;     height = 480,
+    ;     stride = .width * sizeof(u32),
+    ;     format = SHM_FORMAT_ARGB8888)
+    mov rdi, qword [wl_shm_pool_id]
+    xor rsi, rsi
+    mov rdx, 640
+    mov rcx, 480
+    lea r8, [4 * rdx]
+    mov r9, SHM_FORMAT_ARGB8888
+    call wire_send_shm_pool_create_buffer
+    mov qword [wl_buffer_id], rax
 
-    ; wire_flush(display_fd)
-    mov rdi, qword [display_fd]
-    call wire_flush
+    ; wire_send_surface_attach(wl_surface_id, wl_buffer_id, 0, 0)
+    mov rdi, qword [wl_surface_id]
+    mov rsi, qword [wl_buffer_id]
+    xor rdx, rdx
+    xor rcx, rcx
+    call wire_send_surface_attach
 
     ; loop {
-    .loop3:
-        ; read_event()
-        call read_event
+    .outer_loop:
+    
+        ; wire_send_surface_damage(wl_surface_id, 0, 0, 640, 480)
+        mov rdi, qword [wl_surface_id]
+        xor rsi, rsi
+        xor rdx, rdx
+        mov rcx, 640
+        mov r8, 480
+        call wire_send_surface_damage
 
-        ; let (event_size := rdi) = message.size
-        movzx rdi, word [message + WireMessageHeader.size]
+        ; wire_send_surface_commit(wl_surface_id)
+        mov rdi, qword [wl_surface_id]
+        call wire_send_surface_commit
 
-        ; let (object_id := rdi) = message.object_id
-        xor rdi, rdi
-        mov edi, dword [message + WireMessageHeader.object_id]
+        ; let (callback_id := r12) = wire_send_display_sync()
+        call wire_send_display_sync
+        mov r12, rax
 
-        ; let (opcode := rsi) = message.opcode
-        movzx rsi, word [message + WireMessageHeader.opcode]
+        ; wire_flush(display_fd)
+        mov rdi, qword [display_fd]
+        call wire_flush
 
-        ; let (event_id := rdi) = (object_id << 16) | opcode
-        shl rdi, 16
-        or rdi, rsi
+        ; loop {
+        .loop2:
+            ; read_event()
+            call read_event
 
-        ; // Got wl_display.error
-        ; if event_id == (wire_id.wl_display << 16) | wire_event.display_error_opcode
-        ; { handle_display_error() }
-        cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
-        je handle_display_error
+            ; let (event_size := rdi) = message.size
+            movzx rdi, word [message + WireMessageHeader.size]
 
-        ; // Got wl_callback.done
-        ; if event_id == (callback_id << 16) | wire_event.callback_done_opcode
-        ; { break }
-        mov rax, r12
-        shl rax, 16
-        or rax, wire_event.callback_done_opcode
-        cmp rdi, rax
-        je .end_loop3
+            ; let (object_id := rdi) = message.object_id
+            xor rdi, rdi
+            mov edi, dword [message + WireMessageHeader.object_id]
+
+            ; let (opcode := rsi) = message.opcode
+            movzx rsi, word [message + WireMessageHeader.opcode]
+
+            ; let (event_id := rdi) = (object_id << 16) | opcode
+            shl rdi, 16
+            or rdi, rsi
+
+            ; // Got wl_display.error
+            ; if event_id == (wire_id.wl_display << 16) | wire_event.display_error_opcode
+            ; { handle_display_error() }
+            cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
+            je handle_display_error
+
+            ; // Got wl_callback.done
+            ; if event_id == (callback_id << 16) | wire_event.callback_done_opcode
+            ; { break }
+            mov rax, r12
+            shl rax, 16
+            or rax, wire_event.callback_done_opcode
+            cmp rdi, rax
+            je .end_loop2
+
+        ; }
+        jmp .loop2
+        .end_loop2:
 
     ; }
-    jmp .loop3
-    .end_loop3:
+    jmp .outer_loop
 
     ; munmap(shm_ptr, shm_size)
     mov rax, SYSCALL_MUNMAP
@@ -428,6 +474,10 @@ main:
     ; drop(socket_path)
     mov rdi, socket_path
     call String_drop
+
+    ; drop(xdg_wm_base_global)
+    mov rdi, xdg_wm_base_global
+    call RegistryGlobal_drop
 
     ; drop(wl_shm_global)
     mov rdi, wl_shm_global
@@ -613,7 +663,7 @@ handle_registry_global:
     call Str_eq
     test al, al
     movzx rax, al
-    jz .else_if_name
+    jz .else_if_shm
 
         ; wl_compositor_global.name = fmt_args.name as u32
         mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.name]
@@ -631,7 +681,7 @@ handle_registry_global:
 
     ; } else if interface_name == "wl_shm" {
     jmp .end_if_name
-    .else_if_name:
+    .else_if_shm:
     mov rdi, r12
     mov rsi, r13
     mov rdx, wl_shm_str.len
@@ -639,7 +689,7 @@ handle_registry_global:
     call Str_eq
     test al, al
     movzx rax, al
-    jz .end_if_name
+    jz .else_if_wm_base
 
         ; wl_shm_global.name = fmt_args.name as u32
         mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.name]
@@ -654,6 +704,32 @@ handle_registry_global:
         ; wl_shm_global.version = fmt_args.version as u32
         mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.version]
         mov dword [wl_shm_global + RegistryGlobal.version], eax
+
+    ; } else if interface_name == "xdg_wm_base" {
+    jmp .end_if_name
+    .else_if_wm_base:
+    mov rdi, r12
+    mov rsi, r13
+    mov rdx, xdg_wm_base_str.len
+    mov rcx, xdg_wm_base_str.ptr
+    call Str_eq
+    test al, al
+    movzx rax, al
+    jz .end_if_name
+
+        ; xdg_wm_base_global.name = fmt_args.name as u32
+        mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.name]
+        mov dword [xdg_wm_base_global + RegistryGlobal.name], eax
+
+        ; xdg_wm_base_global.interface.push_str(fmt_args.interface)
+        mov rdi, xdg_wm_base_global + RegistryGlobal.interface
+        mov rsi, r12
+        mov rdx, r13
+        call String_push_str
+
+        ; xdg_wm_base_global.version = fmt_args.version as u32
+        mov rax, qword [rbp + .fmt_args + GlobalFmtArgs.version]
+        mov dword [xdg_wm_base_global + RegistryGlobal.version], eax
 
     ; }
     .end_if_name:

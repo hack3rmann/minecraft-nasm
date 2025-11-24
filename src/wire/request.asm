@@ -1,9 +1,9 @@
-%include "../wire.s"
+%include "../string.s"
 %include "../syscall.s"
+%include "../wire.s"
 %include "../error.s"
 %include "../memory.s"
 %include "../debug.s"
-%include "../string.s"
 
 section .text
 
@@ -471,4 +471,323 @@ wire_send_shm_create_pool:
     pop r14
     pop r13
     pop r12
+    ret
+
+; #[systemv]
+; fn wire_send_shm_pool_create_buffer(
+;     (shm_pool_id := rdi): u32,
+;     (offset := rsi): u32,
+;     (width := rdx): u32,
+;     (height := rcx): u32,
+;     (stride := r8): u32,
+;     (format := r9): WlShmFormat
+; ) -> u32 := rax
+wire_send_shm_pool_create_buffer:
+    push r12
+    push rbp
+    mov rbp, rsp
+
+    .format                 equ -4
+    .stride                 equ -4 + .format
+    .height                 equ -4 + .stride
+    .width                  equ -4 + .height
+    .offset                 equ -4 + .width
+    .shm_pool_id            equ -4 + .offset
+
+    .stack_size             equ ALIGNED(-.shm_pool_id)
+
+    sub rsp, .stack_size
+
+    ; args = get_fn_args()
+    mov dword [rbp + .shm_pool_id], edi
+    mov dword [rbp + .offset], esi
+    mov dword [rbp + .width], edx
+    mov dword [rbp + .height], ecx
+    mov dword [rbp + .stride], r8d
+    mov dword [rbp + .format], r9d
+
+    ; wire_begin_request(shm_pool_id, wire_request.shm_pool_create_buffer_opcode)
+    xor rdi, rdi
+    mov edi, dword [rbp + .shm_pool_id]
+    mov rsi, wire_request.shm_pool_create_buffer_opcode
+    call wire_begin_request
+
+    ; let (id := r12) = wire_get_next_id()
+    call wire_get_next_id
+    mov r12, rax
+
+    ; wire_write_uint(id)
+    mov rdi, r12
+    call wire_write_uint
+
+    ; wire_write_uint(offset)
+    xor rdi, rdi
+    mov edi, dword [rbp + .offset]
+    call wire_write_uint
+
+    ; wire_write_uint(width)
+    xor rdi, rdi
+    mov edi, dword [rbp + .width]
+    call wire_write_uint
+
+    ; wire_write_uint(height)
+    xor rdi, rdi
+    mov edi, dword [rbp + .height]
+    call wire_write_uint
+
+    ; wire_write_uint(stride)
+    xor rdi, rdi
+    mov edi, dword [rbp + .stride]
+    call wire_write_uint
+
+    ; wire_write_uint(format)
+    xor rdi, rdi
+    mov edi, dword [rbp + .format]
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    ; return id
+    mov rax, r12
+
+    add rsp, .stack_size
+    
+    pop rbp
+    pop r12
+    ret
+
+; #[systemv]
+; fn wire_send_wm_base_get_xdg_surface(
+;     (wm_base_id := rdi): u32, (wl_surface_id := rsi): u32,
+; ) -> u32 := rax
+wire_send_wm_base_get_xdg_surface:
+    push r12
+    push r13
+    push r14
+
+    ; let (wm_base_id := r12) = wm_base_id
+    mov r12, rdi
+
+    ; let (wl_surface_id := r13) = wl_surface_id
+    mov r13, rsi
+
+    ; wire_begin_request(wm_base_id, wire_request.wm_base_get_xdg_surface_opcode)
+    mov rdi, r12
+    mov rsi, wire_request.wm_base_get_xdg_surface_opcode
+    call wire_begin_request
+
+    ; let (id := r14) = wire_get_next_id()
+    call wire_get_next_id
+    mov r14, rax
+
+    ; wire_write_uint(id)
+    mov rdi, r14
+    call wire_write_uint
+
+    ; wire_write_uint(wl_surface_id)
+    mov rdi, r13
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    ; return id
+    mov rax, r14
+
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; #[systemv]
+; fn wire_send_xdg_surface_get_toplevel((xdg_surface_id := rdi): u32) -> u32 := rax
+wire_send_xdg_surface_get_toplevel:
+    push r12
+    push r13
+
+    ; let (xdg_surface_id := r12) = xdg_surface_id
+    mov r12, rdi
+
+    ; wire_begin_request(xdg_surface_id, wire_request.xdg_surface_get_toplevel_opcode)
+    mov rdi, r12
+    mov rsi, wire_request.xdg_surface_get_toplevel_opcode
+    call wire_begin_request
+
+    ; let (id := r13) = wire_get_next_id()
+    call wire_get_next_id
+    mov r13, rax
+
+    ; wire_write_uint(id)
+    mov rdi, r13
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    ; return id
+    mov rax, r13
+
+    pop r13
+    pop r12
+    ret
+
+; #[systemv]
+; fn wire_send_xdg_toplevel_set_title(
+;     (xdg_toplevel_id := rdi): u32,
+;     Str { title_len := rsi, title_ptr := rdx } @ title,
+; )
+wire_send_xdg_toplevel_set_title:
+    push r12
+    push r13
+    push r14
+
+    ; let (xdg_toplevel_id := r12) = xdg_toplevel_id
+    mov r12, rdi
+
+    ; let (title_len := r13) = title_len
+    mov r13, rsi
+    
+    ; let (title_ptr := r14) = title_len
+    mov r14, rdx
+
+    ; wire_begin_request(xdg_toplevel_id, wire_request.xdg_toplevel_set_title_opcode)
+    mov rdi, r12
+    mov rsi, wire_request.xdg_toplevel_set_title_opcode
+    call wire_begin_request
+
+    ; wire_write_str(title)
+    mov rdi, r13
+    mov rsi, r14
+    call wire_write_str
+
+    ; wire_end_request()
+    call wire_end_request
+
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; fn wire_send_surface_attach(
+;     (wl_surface_id := rdi): u32,
+;     (wl_buffer_id := rsi): u32,
+;     (x := rdx): u32,
+;     (y := rcx): u32,
+; )
+wire_send_surface_attach:
+    push r12
+    push r13
+    push r14
+    push r15
+
+    ; let (wl_surface_id := r12) = wl_surface_id
+    mov r12, rdi
+
+    ; let (wl_buffer_id := r13) = wl_buffer_id
+    mov r13, rsi
+
+    ; let (x := r14) = x
+    mov r14, rdx
+
+    ; let (y := r15) = y
+    mov r15, rcx
+
+    ; wire_begin_request(wl_surface_id, wire_request.surface_attach_opcode)
+    mov rdi, r12
+    mov rsi, wire_request.surface_attach_opcode
+    call wire_begin_request
+
+    ; wire_write_uint(wl_buffer_id)
+    mov rdi, r13
+    call wire_write_uint
+
+    ; wire_write_uint(x)
+    mov rdi, r14
+    call wire_write_uint
+
+    ; wire_write_uint(y)
+    mov rdi, r15
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; fn wire_send_surface_damage(
+;     (wl_surface_id := rdi): u32,
+;     (x := rsi): u32,
+;     (y := rdx): u32,
+;     (width := rcx): u32,
+;     (height := r8): u32,
+; )
+wire_send_surface_damage:
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbx
+
+    ; let (wl_surface_id := r12) = wl_surface_id
+    mov r12, rdi
+
+    ; let (x := r13) = x
+    mov r13, rsi
+
+    ; let (y := r14) = y
+    mov r14, rdx
+
+    ; let (width := r15) = width
+    mov r15, rcx
+
+    ; let (height := rbx) = height
+    mov rbx, r8
+
+    ; wire_begin_request(wl_surface_id, wire_request.surface_damage_opcode)
+    mov rdi, r12
+    mov rsi, wire_request.surface_damage_opcode
+    call wire_begin_request
+
+    ; wire_write_uint(x)
+    mov rdi, r13
+    call wire_write_uint
+
+    ; wire_write_uint(y)
+    mov rdi, r14
+    call wire_write_uint
+
+    ; wire_write_uint(width)
+    mov rdi, r15
+    call wire_write_uint
+
+    ; wire_write_uint(height)
+    mov rdi, rbx
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    pop rbx
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; #[systemv]
+; fn wire_send_surface_commit((wl_surface_id := rdi): u32)
+wire_send_surface_commit:
+    ; wire_begin_request(wl_surface_id, wire_request.surface_commit_opcode)
+    ; mov rdi, rdi
+    mov rsi, wire_request.surface_commit_opcode
+    call wire_begin_request
+
+    ; wire_end_request()
+    call wire_end_request
+
     ret

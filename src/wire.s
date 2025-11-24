@@ -1,8 +1,10 @@
 %ifndef _WIRE_INC
 %define _WIRE_INC
 
-%define WIRE_MESSAGE_BUFFER_SIZE (4 * 64)
+%define WIRE_MESSAGE_BUFFER_SIZE (4 * 512)
 %define WIRE_MESSAGE_MAX_N_FDS   64
+
+%define SHM_FORMAT_ARGB8888 0
 
 section .data
     wire_last_id  dq 1
@@ -20,7 +22,23 @@ section .bss
 
         .compositor_create_surface_opcode equ 0
 
+        .surface_destroy_opcode           equ 0
+        .surface_attach_opcode            equ 1
+        .surface_damage_opcode            equ 2
+        .surface_frame_opcode             equ 3
+        .surface_set_opaque_region_opcode equ 4
+        .surface_set_input_region_opcode  equ 5
+        .surface_commit_opcode            equ 6
+
         .shm_create_pool_opcode           equ 0
+
+        .shm_pool_create_buffer_opcode    equ 0
+
+        .wm_base_get_xdg_surface_opcode   equ 2
+
+        .xdg_surface_get_toplevel_opcode  equ 1
+
+        .xdg_toplevel_set_title_opcode    equ 2
 
     wire_event:
         .display_error_opcode             equ 0
@@ -91,6 +109,16 @@ extern wire_send_registry_bind, wire_send_registry_bind_global
 
 extern wire_send_compositor_create_surface
 
+extern wire_send_surface_attach, wire_send_surface_damage, wire_send_surface_commit
+
 extern wire_send_shm_create_pool
+
+extern wire_send_shm_pool_create_buffer
+
+extern wire_send_wm_base_get_xdg_surface
+
+extern wire_send_xdg_surface_get_toplevel
+
+extern wire_send_xdg_toplevel_set_title
 
 %endif ; !_WIRE_INC
