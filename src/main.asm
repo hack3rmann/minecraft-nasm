@@ -257,6 +257,12 @@ main:
     cmp qword [shm_ptr], 0
     je abort
 
+    ; set(shm_ptr, 0xFF, shm_size)
+    mov rdi, qword [shm_ptr]
+    mov rsi, 0xFF
+    mov rdx, shm_size
+    call set
+
     ; _ = wire_send_display_get_registry()
     call wire_send_display_get_registry
 
@@ -412,7 +418,7 @@ main:
         call wire_flush
 
         ; loop {
-        .loop2:
+        .inner_loop:
             ; read_event()
             call read_event
 
@@ -443,13 +449,57 @@ main:
             shl rax, 16
             or rax, wire_event.callback_done_opcode
             cmp rdi, rax
-            je .end_loop2
+            je .end_inner_loop
+
+            ; // Got xdg_surface.configure
+            ; if event_id == (xdg_surface_id << 16) | wire_event.xdg_surface_configure_opcode
+            mov rax, qword [xdg_surface_id]
+            shl rax, 16
+            or rax, wire_event.xdg_surface_configure_opcode
+            cmp rdi, rax
+            jne .end_if_configure
+
+                ; handle_xdg_surface_configure()
+                call handle_xdg_surface_configure
+
+                ; continue
+                jmp .inner_loop
+
+            ; }
+            .end_if_configure:
+
+            ; // Got xdg_surface.configure
+            ; if event_id == (xdg_wm_base_id << 16) | wire_event.wm_base_ping_opcode
+            mov rax, qword [xdg_wm_base_id]
+            shl rax, 16
+            or rax, wire_event.wm_base_ping_opcode
+            cmp rdi, rax
+            jne .end_if_ping
+
+                ; handle_wm_base_ping()
+                call handle_wm_base_ping
+
+                ; continue
+                jmp .inner_loop
+
+            ; }
+            .end_if_ping:
+
+            ; // Got xdg_toplevel.close
+            ; if event_id == (xdg_toplevel_id << 16) | wire_event.xdg_toplevel_close_opcode
+            ; { break }
+            mov rax, qword [xdg_toplevel_id]
+            shl rax, 16
+            or rax, wire_event.xdg_toplevel_close_opcode
+            cmp rdi, rax
+            je .end_outer_loop
 
         ; }
-        jmp .loop2
-        .end_loop2:
+        jmp .inner_loop
+        .end_inner_loop:
 
     ; }
+    .end_outer_loop
     jmp .outer_loop
 
     ; munmap(shm_ptr, shm_size)
@@ -739,6 +789,34 @@ handle_registry_global:
     pop rbp
     pop r13
     pop r12
+    ret
+
+; #[systemv]
+; fn handle_xdg_surface_configure()
+handle_xdg_surface_configure:
+    ; let (serial := rsi) = message.body.serial
+    xor rsi, rsi
+    mov esi, dword [message + WireMessageHeader.sizeof + XdgSurfaceConfigureEvent.serial]
+
+    ; wire_send_xdg_surface_ack_configure(xdg_surface_id, serial)
+    mov rdi, qword [xdg_surface_id]
+    ; mov rsi, rsi
+    call wire_send_xdg_surface_ack_configure
+    
+    ret
+
+; #[systemv]
+; fn handle_wm_base_ping()
+handle_wm_base_ping:
+    ; let (serial := rsi) = message.body.serial
+    xor rsi, rsi
+    mov esi, dword [message + WireMessageHeader.sizeof + WmBasePingEvent.serial]
+
+    ; wire_send_wm_base_pong(xdg_wm_base_id, serial)
+    mov rdi, qword [xdg_wm_base_id]
+    ; mov rsi, rsi
+    call wire_send_wm_base_pong
+    
     ret
 
 ; #[jumpable]

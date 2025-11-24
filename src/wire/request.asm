@@ -791,3 +791,58 @@ wire_send_surface_commit:
     call wire_end_request
 
     ret
+
+; #[systemv]
+; fn wire_send_xdg_surface_ack_configure((xdg_surface_id := rdi): u32, (serial := rsi): u32)
+wire_send_xdg_surface_ack_configure:
+    push r12
+    push r13
+
+    ; let (xdg_surface_id := r12) = xdg_surface_id
+    mov r12, rdi
+
+    ; let (serial := r13) = serial
+    mov r13, rsi
+
+    ; wire_begin_request(xdg_surface_id, wire_request.xdg_surface_ack_configure_opcode)
+    mov rdi, r12
+    mov rsi, wire_request.xdg_surface_ack_configure_opcode
+    call wire_begin_request
+
+    ; wire_write_uint(serial)
+    mov rdi, r13
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    pop r13
+    pop r12
+    ret
+
+; fn wire_send_wm_base_pong((wm_base_id := rdi): u32, (serial := rsi): u32)
+wire_send_wm_base_pong:
+    push r12
+    push r13
+
+    ; let (wm_base_id := r12) = wm_base_id
+    mov r12, rdi
+
+    ; let (serial := r13) = serial
+    mov r13, rsi
+
+    ; wire_begin_request(wm_base_id, wire_request.wm_base_pong_opcode)
+    mov rdi, r12
+    mov rsi, wire_request.wm_base_pong_opcode
+    call wire_begin_request
+
+    ; wire_write_uint(serial)
+    mov rdi, r13
+    call wire_write_uint
+
+    ; wire_end_request()
+    call wire_end_request
+
+    pop r13
+    pop r12
+    ret

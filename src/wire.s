@@ -35,8 +35,10 @@ section .bss
         .shm_pool_create_buffer_opcode    equ 0
 
         .wm_base_get_xdg_surface_opcode   equ 2
+        .wm_base_pong_opcode              equ 3
 
         .xdg_surface_get_toplevel_opcode  equ 1
+        .xdg_surface_ack_configure_opcode equ 4
 
         .xdg_toplevel_set_title_opcode    equ 2
 
@@ -44,6 +46,12 @@ section .bss
         .display_error_opcode             equ 0
         .callback_done_opcode             equ 0
         .registry_global_opcode           equ 0
+
+        .xdg_toplevel_close_opcode        equ 1
+
+        .wm_base_ping_opcode              equ 0
+
+        .xdg_surface_configure_opcode     equ 0
 
     ; static wire_message_buffer_len: usize
     wire_message_buffer_len               resq 1
@@ -90,6 +98,21 @@ struc RegistryGlobalEvent
     .sizeof         equ $-.name
 endstruc
 
+struc WmBasePingEvent
+    .serial         resd 1
+    .sizeof         equ $-.serial
+endstruc
+
+struc XdgSurfaceConfigureEvent
+    .serial         resd 1
+    .sizeof         equ $-.serial
+endstruc
+
+struc XdgToplevelCloseEvent
+    .pad            resb 0
+    .sizeof         equ $-.pad
+endstruc
+
 struc RegistryGlobal
     ; name: u32
     .name           resd 1
@@ -115,9 +138,9 @@ extern wire_send_shm_create_pool
 
 extern wire_send_shm_pool_create_buffer
 
-extern wire_send_wm_base_get_xdg_surface
+extern wire_send_wm_base_get_xdg_surface, wire_send_wm_base_pong
 
-extern wire_send_xdg_surface_get_toplevel
+extern wire_send_xdg_surface_get_toplevel, wire_send_xdg_surface_ack_configure
 
 extern wire_send_xdg_toplevel_set_title
 
