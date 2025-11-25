@@ -473,9 +473,7 @@ main:
 ; #[systemv]
 ; fn get_wayland_socket_path(($ret := rdi): *mut String) -> String
 get_wayland_socket_path:
-    push r12
-    push r13
-    push r14
+    PUSH r12, r13, r14
 
     ; let ($ret := r12) = $ret
     mov r12, rdi
@@ -566,17 +564,13 @@ get_wayland_socket_path:
     ; }
     .display_end_if:
 
-    pop r14
-    pop r13
-    pop r12
+    POP r14, r13, r12
     ret
 
 ; #[systemv]
 ; fn handle_registry_global()
 handle_registry_global:
-    push r12
-    push r13
-    push rbp
+    PUSH r12, r13, rbp
     mov rbp, rsp
 
     struc GlobalFmtArgs
@@ -711,9 +705,7 @@ handle_registry_global:
 
     add rsp, .stack_size
 
-    pop rbp
-    pop r13
-    pop r12
+    POP rbp, r13, r12
     ret
 
 ; #[systemv]
@@ -761,7 +753,7 @@ handle_delete_id:
 ; #[noreturn]
 ; fn handle_display_error()
 handle_display_error:
-    push rbp
+    PUSH rbp
     mov rbp, rsp
 
     .fmt_args       equ -32
