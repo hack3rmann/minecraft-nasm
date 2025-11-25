@@ -300,12 +300,12 @@ main:
         xor rcx, rcx
         call wire_send_surface_attach
     
-        ; wire_send_surface_damage(wl_surface_id, 0, 0, window_width, window_height)
+        ; wire_send_surface_damage(wl_surface_id, 0, 0, u32::MAX, u32::MAX)
         mov rdi, qword [wl_surface_id]
         xor rsi, rsi
         xor rdx, rdx
-        mov rcx, window_width
-        mov r8, window_height
+        mov rcx, 0xFFFFFFFF
+        mov r8, 0xFFFFFFFF
         call wire_send_surface_damage
 
         ; wire_send_surface_commit(wl_surface_id)
