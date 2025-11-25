@@ -1,7 +1,7 @@
 %ifndef _DEBUG_INC
 %define _DEBUG_INC
 
-%define N_PUSHAS 9
+%define N_PUSHAS 16
 
 %macro PUSH 0-*
     %rep %0
