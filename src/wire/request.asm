@@ -10,11 +10,47 @@ section .text
 ; #[fastcall]
 ; fn wire_get_next_id() -> usize := rax
 wire_get_next_id:
-    ; wire_last_id += 1
-    inc qword [wire_last_id]
+    ; let (id := rax) = if wire_n_reused_ids == 0 {
+    cmp qword [wire_n_reused_ids], 0
+    jnz .else
+
+        ; wire_last_id += 1
+        inc qword [wire_last_id]
+
+        ; id = wire_last_id
+        mov rax, qword [wire_last_id]
+
+    ; } else {
+    jmp .end_if
+    .else:
+
+        ; wire_n_reused_ids -= 1
+        dec qword [wire_n_reused_ids]
+
+        ; id = wire_reused_ids[wire_n_reused_ids]
+        mov rax, qword [wire_n_reused_ids]
+        mov eax, dword [wire_reused_ids + 4 * rax]
+
+    ; }
+    .end_if:
+
+    ; assert wire_last_id < WIRE_MAX_N_OBJECTS
+    cmp rax, WIRE_MAX_N_OBJECTS
+    jae abort
 
     ; return wire_last_id
-    mov rax, qword [wire_last_id]
+
+    ret
+
+; #[fastcall(rax)]
+; fn wire_release_id((id := rdi): u32)
+wire_release_id:
+    ; wire_reused_ids[wire_n_reused_ids] = id
+    mov rax, qword [wire_n_reused_ids]
+    mov dword [wire_reused_ids + 4 * rax], edi
+
+    ; wire_n_reused_ids += 1
+    inc qword [wire_n_reused_ids]
 
     ret
 
@@ -31,6 +67,9 @@ wire_send_display_sync:
     ; let (id := r12) = wire_get_next_id()
     call wire_get_next_id
     mov r12, rax
+
+    ; wire_object_types(id) = WlObjectType::Callback
+    mov byte [wire_object_types + r12], WL_OBJECT_TYPE_CALLBACK
 
     ; wire_write_uint(id)
     mov rdi, r12
@@ -59,6 +98,9 @@ wire_send_display_get_registry:
     call wire_get_next_id
     mov r12, rax
 
+    ; wire_object_types[id] = WlObjectType::Registry
+    mov byte [wire_object_types + r12], WL_OBJECT_TYPE_REGISTRY
+
     ; wire_write_uint(id)
     mov rdi, r12
     call wire_write_uint
@@ -82,6 +124,8 @@ wire_send_registry_bind:
     push r12
     push r13
     push r14
+    push r15
+    push rbx
 
     ; let (name := r12) = name
     mov r12, rdi
@@ -89,9 +133,9 @@ wire_send_registry_bind:
     ; let (version := r14) = version
     mov r14, rsi
 
-    ; let (interface := r10:r11) = interface
-    mov r10, rdx
-    mov r11, rcx
+    ; let (interface := r15:rbx) = interface
+    mov r15, rdx
+    mov rbx, rcx
 
     ; wire_begin_request(wire_id.wl_registry, wire_request.registry_bind_opcode)
     mov rdi, wire_id.wl_registry
@@ -102,6 +146,13 @@ wire_send_registry_bind:
     call wire_get_next_id
     mov r13, rax
 
+    ; wire_object_types[id] = WlObjectType::from_str(interface)
+    mov rdi, r15
+    mov rsi, rbx
+    call WlObjectType_from_str
+    mov byte [wire_object_types + r13], al
+    movzx rax, al
+
     ; wire_write_uint(name)
     mov rdi, r12
     call wire_write_uint
@@ -109,8 +160,8 @@ wire_send_registry_bind:
     ; // NewId { interface: str, version: u32, id: u32 }
 
     ; wire_write_str(interface)
-    mov rdi, r10
-    mov rsi, r11
+    mov rdi, r15
+    mov rsi, rbx
     call wire_write_str
 
     ; wire_write_uint(version)
@@ -127,6 +178,8 @@ wire_send_registry_bind:
     ; return id
     mov rax, r13
 
+    pop rbx
+    pop r15
     pop r14
     pop r13
     pop r12
@@ -383,6 +436,9 @@ wire_send_compositor_create_surface:
     call wire_get_next_id
     mov r13, rax
 
+    ; wire_object_types[id] = WlObjectType::Surface
+    mov byte [wire_object_types + r13], WL_OBJECT_TYPE_SURFACE
+
     ; wire_write_uint(id)
     mov rdi, r13
     call wire_write_uint
@@ -402,6 +458,8 @@ wire_send_compositor_create_surface:
 wire_send_registry_bind_global:
     push r12
     push r13
+    push r14
+    push r15
 
     ; let (global := r12) = global
     mov r12, rdi
@@ -412,9 +470,13 @@ wire_send_registry_bind_global:
     mov edi, dword [r12 + RegistryGlobal.name]
     mov esi, dword [r12 + RegistryGlobal.version]
     mov rdx, qword [r12 + RegistryGlobal.interface + Str.len]
+    mov r14, rdx
     mov rcx, qword [r12 + RegistryGlobal.interface + Str.ptr]
+    mov r15, rcx
     call wire_send_registry_bind
 
+    pop r15
+    pop r14
     pop r13
     pop r12
     ret
@@ -448,6 +510,9 @@ wire_send_shm_create_pool:
     ; let (id := r15) = wire_get_next_id()
     call wire_get_next_id
     mov r15, rax
+
+    ; wire_object_types[id] = WlObjectType::ShmPool
+    mov byte [wire_object_types + r15], WL_OBJECT_TYPE_SHM_POOL
 
     ; wire_write_uint(id)
     mov rdi, r15
@@ -516,6 +581,9 @@ wire_send_shm_pool_create_buffer:
     call wire_get_next_id
     mov r12, rax
 
+    ; wire_object_types[id] = WlObjectType::Buffer
+    mov byte [wire_object_types + r12], WL_OBJECT_TYPE_BUFFER
+
     ; wire_write_uint(id)
     mov rdi, r12
     call wire_write_uint
@@ -581,6 +649,9 @@ wire_send_wm_base_get_xdg_surface:
     call wire_get_next_id
     mov r14, rax
 
+    ; wire_object_types[id] = WlObjectType::XdgSurface
+    mov byte [wire_object_types + r14], WL_OBJECT_TYPE_XDG_SURFACE
+
     ; wire_write_uint(id)
     mov rdi, r14
     call wire_write_uint
@@ -617,6 +688,9 @@ wire_send_xdg_surface_get_toplevel:
     ; let (id := r13) = wire_get_next_id()
     call wire_get_next_id
     mov r13, rax
+
+    ; wire_object_types[id] = WlObjectType::Toplevel
+    mov byte [wire_object_types + r13], WL_OBJECT_TYPE_TOPLEVEL
 
     ; wire_write_uint(id)
     mov rdi, r13

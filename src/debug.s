@@ -79,7 +79,7 @@
 %push
 %push
     section .rodata
-        %$str     db %1, LF
+        %$str     db %1
         %$str.len equ $ - %$str
 
     section .text

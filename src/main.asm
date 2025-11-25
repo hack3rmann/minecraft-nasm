@@ -77,81 +77,7 @@ section .bss
         .sun_path   resb 254
     addr_max_len    equ $-addr
 
-    ; static wl_compositor_global: RegistryGlobal
-    wl_compositor_global resb RegistryGlobal.sizeof
-
-    ; static wl_shm_global: RegistryGlobal
-    wl_shm_global resb RegistryGlobal.sizeof
-
-    ; static xdg_wm_base_global: RegistryGlobal
-    xdg_wm_base_global resb RegistryGlobal.sizeof
-
-    ; static wl_compositor_id: u32
-    wl_compositor_id resq 1
-
-    ; static wl_shm_id: u32
-    wl_shm_id resq 1
-
-    ; static wl_shm_pool_id: u32
-    wl_shm_pool_id resq 1
-
-    ; static shm_id: key_t
-    shm_id resq 1
-
-    ; static shm_fd: Fd
-    shm_fd resq 1
-
-    ; static shm_ptr: *mut u8
-    shm_ptr resq 1
-
-    ; static wl_surface_id: u32
-    wl_surface_id resq 1
-
-    ; static wl_buffer_id: u32
-    wl_buffer_id resq 1
-
-    ; static xdg_wm_base_id: u32
-    xdg_wm_base_id resq 1
-
-    ; static xdg_surface_id: u32
-    xdg_surface_id resq 1
-
-    ; static xdg_toplevel_id: u32
-    xdg_toplevel_id resq 1
-
 section .text
-
-; fn RegistryGlobal::new(($ret := rdi): *mut Self) -> Self
-RegistryGlobal_new:
-    ; $ret->name = 0
-    mov dword [rdi + RegistryGlobal.name], 0
-
-    ; $ret->version = 0
-    mov dword [rdi + RegistryGlobal.version], 0
-
-    ; $ret->interface = String::new()
-    lea rdi, [rdi + RegistryGlobal.interface]
-    call String_new
-
-    ret
-
-; fn RegistryGlobal::drop(&mut self := rdi)
-RegistryGlobal_drop:
-    push r12
-
-    ; let (self := r12) = self
-    mov r12, rdi
-
-    ; drop(self.interface)
-    lea rdi, [r12 + RegistryGlobal.interface]
-    call String_drop
-
-    ; *self = RegistryGlobal::new()
-    mov rdi, r12
-    call RegistryGlobal_new
-
-    pop r12
-    ret
 
 ; #[systemv]
 ; fn main() -> i64
@@ -159,17 +85,8 @@ main:
     ; init_format()
     call init_format
 
-    ; wl_compositor_global = RegistryGlobal::new()
-    mov rdi, wl_compositor_global
-    call RegistryGlobal_new
-
-    ; wl_shm_global = RegistryGlobal::new()
-    mov rdi, wl_shm_global
-    call RegistryGlobal_new
-
-    ; xdg_wm_base_global = RegistryGlobal::new()
-    mov rdi, xdg_wm_base_global
-    call RegistryGlobal_new
+    ; wire_init()
+    call wire_init
 
     ; socket_path = get_wayland_socket_path()
     mov rdi, socket_path
@@ -294,6 +211,17 @@ main:
         ; { handle_display_error() }
         cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
         je handle_display_error
+
+        ; // Got wl_display.global
+        ; if event_id == (wire_id.wl_display << 16) | wire_event.display_delete_id_opcode {
+        cmp rdi, (wire_id.wl_display << 16) | wire_event.display_delete_id_opcode
+        jne .end_if_delete_id
+
+            ; handle_delete_id()
+            call handle_delete_id
+
+        ; }
+        .end_if_delete_id:
 
         ; // Got wl_registry.global
         ; if event_id == (wire_id.wl_registry << 16) | wire_event.registry_global_opcode {
@@ -438,6 +366,17 @@ main:
             cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
             je handle_display_error
 
+            ; // Got wl_display.global
+            ; if event_id == (wire_id.wl_display << 16) | wire_event.display_delete_id_opcode {
+            cmp rdi, (wire_id.wl_display << 16) | wire_event.display_delete_id_opcode
+            jne .end_if_delete_id2
+
+                ; handle_delete_id()
+                call handle_delete_id
+
+            ; }
+            .end_if_delete_id2:
+
             ; // Got wl_callback.done
             ; if event_id == (callback_id << 16) | wire_event.callback_done_opcode
             ; { break }
@@ -521,17 +460,8 @@ main:
     mov rdi, socket_path
     call String_drop
 
-    ; drop(xdg_wm_base_global)
-    mov rdi, xdg_wm_base_global
-    call RegistryGlobal_drop
-
-    ; drop(wl_shm_global)
-    mov rdi, wl_shm_global
-    call RegistryGlobal_drop
-
-    ; drop(wl_compositor_global)
-    mov rdi, wl_compositor_global
-    call RegistryGlobal_drop
+    ; wire_deinit()
+    call wire_deinit
 
     ; deinit_format()
     call deinit_format
@@ -812,6 +742,19 @@ handle_wm_base_ping:
     ; mov rsi, rsi
     call wire_send_wm_base_pong
     
+    ret
+
+; #[systemv]
+; fn handle_delete_id()
+handle_delete_id:
+    ; let (id := rdi) = message.body.id
+    xor rdi, rdi
+    mov edi, dword [message + WireMessageHeader.sizeof + DisplayDeleteIdEvent.id]
+
+    ; wire_release_id(id)
+    ; mov rdi, rdi
+    call wire_release_id
+
     ret
 
 ; #[jumpable]
