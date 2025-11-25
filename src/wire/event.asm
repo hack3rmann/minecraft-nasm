@@ -34,23 +34,28 @@ wire_read_event:
     cmp rax, WireMessageHeader.sizeof
     jne abort
 
-    ; let (body_size := rdx) = wire_message.size
+    ; let (body_size := rdx) = wire_message.size - WireMessageHeader::HEADER_SIZE
     movzx rdx, word [wire_message + WireMessageHeader.size]
-
-    ; body_size -= WireMessageHeader::HEADER_SIZE
     sub rdx, WireMessageHeader.sizeof
 
-    ; let (n_read := rax) = read(display_fd, &wire_message + WireMessageHeader::HEADER_SIZE, body_size)
-    mov rax, SYSCALL_READ
-    mov rdi, r12
-    mov rsi, wire_message + WireMessageHeader.sizeof
-    ; mov rdx, rdx
-    syscall
-    call exit_on_error
+    ; if body_size != 0 {
+    test rdx, rdx
+    jz .end_if
 
-    ; assert n_read == body_size
-    cmp rax, rdx
-    jne abort
+        ; let (n_read := rax) = read(display_fd, &wire_message + WireMessageHeader::HEADER_SIZE, body_size)
+        mov rax, SYSCALL_READ
+        mov rdi, r12
+        mov rsi, wire_message + WireMessageHeader.sizeof
+        ; mov rdx, rdx
+        syscall
+        call exit_on_error
+
+        ; assert n_read == body_size
+        cmp rax, rdx
+        jne abort
+
+    ; }
+    .end_if:
 
     POP r12
     ret
@@ -70,6 +75,12 @@ wire_dispatch_event:
     movzx rdi, byte [wire_object_types + r12]
     movzx rsi, word [wire_message + WireMessageHeader.opcode]
     call wire_get_dispatcher
+
+    movzx r8, byte [wire_object_types + r12]
+    movzx r9, word [wire_message + WireMessageHeader.opcode]
+
+    ; DEBUG_UINT r8
+    ; DEBUG_UINT r9
 
     ; if dispatch == null { return }
     test rax, rax

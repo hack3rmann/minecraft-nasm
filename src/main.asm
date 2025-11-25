@@ -32,7 +32,9 @@ section .rodata
     dev_shm_path.ptr      db "/dev/shm/minecraft", 0
     dev_shm_path.len      equ $-dev_shm_path.ptr-1
 
-    shm_size              equ 640*480*4
+    window_width          equ 2500
+    window_height         equ 1613
+    shm_size              equ 4 * window_width * window_height
 
 section .data
     ; static is_window_open: bool
@@ -200,6 +202,15 @@ main:
     mov rdx, handle_toplevel_close
     call wire_set_dispatcher
 
+    ; wire_set_dispatcher(
+    ;     WlObjectType::Buffer,
+    ;     wire_event.buffer_release_opcode,
+    ;     handle_buffer_release)
+    mov rdi, WL_OBJECT_TYPE_BUFFER
+    mov rsi, wire_event.buffer_release_opcode
+    mov rdx, handle_buffer_release
+    call wire_set_dispatcher
+
     ; _ = wire_send_display_get_registry()
     call wire_send_display_get_registry
 
@@ -248,6 +259,12 @@ main:
     mov rdx, minecraft_str.ptr
     call wire_send_xdg_toplevel_set_title
 
+    ; wire_send_xdg_toplevel_set_app_id(xdg_toplevel_id, "Minecraft")
+    mov rdi, qword [xdg_toplevel_id]
+    mov rsi, minecraft_str.len
+    mov rdx, minecraft_str.ptr
+    call wire_send_xdg_toplevel_set_app_id
+
     ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm_fd, shm_size)
     mov rdi, qword [wl_shm_id]
     mov rsi, qword [shm_fd]
@@ -258,16 +275,16 @@ main:
     ; wl_buffer_id = wire_send_shm_pool_create_buffer(
     ;     wl_shm_pool_id,
     ;     offset = 0,
-    ;     width = 640,
-    ;     height = 480,
+    ;     width = window_width,
+    ;     height = window_height,
     ;     stride = .width * sizeof(u32),
-    ;     format = SHM_FORMAT_ARGB8888)
+    ;     format = SHM_FORMAT_XRGB8888)
     mov rdi, qword [wl_shm_pool_id]
     xor rsi, rsi
-    mov rdx, 640
-    mov rcx, 480
+    mov rdx, window_width
+    mov rcx, window_height
     lea r8, [4 * rdx]
-    mov r9, SHM_FORMAT_ARGB8888
+    mov r9, SHM_FORMAT_XRGB8888
     call wire_send_shm_pool_create_buffer
     mov qword [wl_buffer_id], rax
 
@@ -283,12 +300,12 @@ main:
         xor rcx, rcx
         call wire_send_surface_attach
     
-        ; wire_send_surface_damage(wl_surface_id, 0, 0, 640, 480)
+        ; wire_send_surface_damage(wl_surface_id, 0, 0, window_width, window_height)
         mov rdi, qword [wl_surface_id]
         xor rsi, rsi
         xor rdx, rdx
-        mov rcx, 640
-        mov r8, 480
+        mov rcx, window_width
+        mov r8, window_height
         call wire_send_surface_damage
 
         ; wire_send_surface_commit(wl_surface_id)
@@ -575,6 +592,11 @@ handle_registry_global:
     ret
 
 ; #[systemv]
+; fn handle_buffer_release((buffer_id := rdi): u32)
+handle_buffer_release:
+    ret
+
+; #[systemv]
 ; fn handle_xdg_surface_configure((xdg_surface_id := rdi): u32)
 handle_xdg_surface_configure:
     ; let (serial := rsi) = wire_message.body.serial
@@ -600,19 +622,6 @@ handle_wm_base_ping:
     ; mov rsi, rsi
     call wire_send_wm_base_pong
     
-    ret
-
-; #[systemv]
-; fn handle_delete_id((_display_id := rdi): u32)
-handle_delete_id:
-    ; let (id := rdi) = wire_message.body.id
-    xor rdi, rdi
-    mov edi, dword [wire_message + WireMessageHeader.sizeof + DisplayDeleteIdEvent.id]
-
-    ; wire_release_id(id)
-    ; mov rdi, rdi
-    call wire_release_id
-
     ret
 
 ; #[systemv]

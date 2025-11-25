@@ -706,11 +706,19 @@ wire_send_xdg_surface_get_toplevel:
     pop r12
     ret
 
+; NOTE(hack3rmann): the behavior exactly matches
+;
+; #[systemv]
+; fn wire_send_xdg_toplevel_set_app_id(
+;     (xdg_toplevel_id := rdi): u32,
+;     Str { app_id_len := rsi, app_id_ptr := rdx } @ app_id,
+; )
 ; #[systemv]
 ; fn wire_send_xdg_toplevel_set_title(
 ;     (xdg_toplevel_id := rdi): u32,
 ;     Str { title_len := rsi, title_ptr := rdx } @ title,
 ; )
+wire_send_xdg_toplevel_set_app_id:
 wire_send_xdg_toplevel_set_title:
     push r12
     push r13
@@ -919,4 +927,17 @@ wire_send_wm_base_pong:
 
     pop r13
     pop r12
+    ret
+
+; #[systemv]
+; fn wire_send_buffer_destroy((wl_buffer_id := rdi): u32)
+wire_send_buffer_destroy:
+    ; wire_begin_request(wl_buffer_id, wire_request.buffer_destroy_opcode)
+    ; mov rdi, rdi
+    mov rsi, wire_request.buffer_destroy_opcode
+    call wire_begin_request
+
+    ; wire_end_request()
+    call wire_end_request
+
     ret
