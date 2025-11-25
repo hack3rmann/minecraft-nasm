@@ -20,13 +20,11 @@
 %macro PUSHA 0
     pushf
     PUSH rax, rcx, rdx, rbx, rsp, rbp, rsi, rdi, \
-         r0, r1, r2, r3, r4, r5 ,r6, r7, r8, r9, \
-         r10, r11, r12, r13, r14, r15
+         r8, r9, r10, r11, r12, r13, r14, r15
 %endmacro
 
 %macro POPA 0
-    POP r15, r14, r13, r12, r11, r10, r9, r8, r7, \
-        r6, r5, r4, r3, r2, r1, r0, rdi, rsi, rbp, \
+    POP r15, r14, r13, r12, r11, r10, r9, r8, rdi, rsi, rbp, \
         rsp, rbx, rdx, rcx, rax
     popf
 %endmacro
