@@ -3,27 +3,31 @@
 
 %define N_PUSHAS 9
 
+%macro PUSH 0-*
+    %rep %0
+        push %1
+    %rotate 1
+    %endrep
+%endmacro
+
+%macro POP 0-*
+    %rep %0
+        POP %1
+    %rotate 1
+    %endrep
+%endmacro
+
 %macro PUSHA 0
     pushf
-    push rax
-    push rcx
-    push rdx
-    push rbx
-    push rsp
-    push rbp
-    push rsi
-    push rdi
+    PUSH rax, rcx, rdx, rbx, rsp, rbp, rsi, rdi, \
+         r0, r1, r2, r3, r4, r5 ,r6, r7, r8, r9, \
+         r10, r11, r12, r13, r14, r15
 %endmacro
 
 %macro POPA 0
-    pop rdi
-    pop rsi
-    pop rbp
-    pop rsp
-    pop rbx
-    pop rdx
-    pop rcx
-    pop rax
+    POP r15, r14, r13, r12, r11, r10, r9, r8, r7, \
+        r6, r5, r4, r3, r2, r1, r0, rdi, rsi, rbp, \
+        rsp, rbx, rdx, rcx, rax
     popf
 %endmacro
 
