@@ -6,7 +6,10 @@
 
 %define SHM_FORMAT_ARGB8888 0
 
-%define WIRE_MAX_N_OBJECTS 256
+%define WIRE_MAX_N_OBJECTS         256
+%define WIRE_MAX_N_CALLBACKS_LOG2  5
+%define WIRE_MAX_N_CALLBACKS       (1 << WIRE_MAX_N_CALLBACKS_LOG2)
+%define WIRE_MAX_MESSAGE_LEN       256
 
 ; enum WlObjectType
 %define WL_OBJECT_TYPE_INVALID      0
@@ -21,6 +24,7 @@
 %define WL_OBJECT_TYPE_TOPLEVEL     9
 %define WL_OBJECT_TYPE_BUFFER       10
 %define WL_OBJECT_TYPE_CALLBACK     11
+%define WL_OBJECT_TYPE_COUNT        (1 + WL_OBJECT_TYPE_CALLBACK)
 
 struc WireMessageHeader
     ; object_id: u32
@@ -78,103 +82,72 @@ struc RegistryGlobal
     .sizeof         equ $-.name
 endstruc
 
-section .data
-    wire_last_id          dq 1
+extern wire_last_id, wire_all_objects, wire_object_types, wire_n_reused_ids, wire_callbacks, \
+       wire_message_buffer_len, wire_current_message_len, wire_message_buffer, wire_message_n_fds, \
+       wire_message_fds_header, wire_message_fds, wire_reused_ids, wire_message
 
-    ; static wire_all_objects: [RegistryGlobal; WIRE_MAX_N_OBJECTS]
-    ;     = mem::zeroed()
-                          align 16
-    wire_all_objects      times WIRE_MAX_N_OBJECTS * RegistryGlobal.sizeof \
-                          db 0
+wl_compositor_global  equ wire_all_objects + 0 * RegistryGlobal.sizeof
+wl_shm_global         equ wire_all_objects + 1 * RegistryGlobal.sizeof
+xdg_wm_base_global    equ wire_all_objects + 2 * RegistryGlobal.sizeof
+wl_compositor_id      equ wire_all_objects + 3 * RegistryGlobal.sizeof
+wl_shm_id             equ wire_all_objects + 4 * RegistryGlobal.sizeof
+wl_shm_pool_id        equ wire_all_objects + 5 * RegistryGlobal.sizeof
+shm_id                equ wire_all_objects + 6 * RegistryGlobal.sizeof
+shm_fd                equ wire_all_objects + 7 * RegistryGlobal.sizeof
+shm_ptr               equ wire_all_objects + 8 * RegistryGlobal.sizeof
+wl_surface_id         equ wire_all_objects + 9 * RegistryGlobal.sizeof
+wl_buffer_id          equ wire_all_objects + 10 * RegistryGlobal.sizeof
+xdg_wm_base_id        equ wire_all_objects + 11 * RegistryGlobal.sizeof
+xdg_surface_id        equ wire_all_objects + 12 * RegistryGlobal.sizeof
+xdg_toplevel_id       equ wire_all_objects + 13 * RegistryGlobal.sizeof
 
-    wl_compositor_global  equ wire_all_objects + 0 * RegistryGlobal.sizeof
-    wl_shm_global         equ wire_all_objects + 1 * RegistryGlobal.sizeof
-    xdg_wm_base_global    equ wire_all_objects + 2 * RegistryGlobal.sizeof
-    wl_compositor_id      equ wire_all_objects + 3 * RegistryGlobal.sizeof
-    wl_shm_id             equ wire_all_objects + 4 * RegistryGlobal.sizeof
-    wl_shm_pool_id        equ wire_all_objects + 5 * RegistryGlobal.sizeof
-    shm_id                equ wire_all_objects + 6 * RegistryGlobal.sizeof
-    shm_fd                equ wire_all_objects + 7 * RegistryGlobal.sizeof
-    shm_ptr               equ wire_all_objects + 8 * RegistryGlobal.sizeof
-    wl_surface_id         equ wire_all_objects + 9 * RegistryGlobal.sizeof
-    wl_buffer_id          equ wire_all_objects + 10 * RegistryGlobal.sizeof
-    xdg_wm_base_id        equ wire_all_objects + 11 * RegistryGlobal.sizeof
-    xdg_surface_id        equ wire_all_objects + 12 * RegistryGlobal.sizeof
-    xdg_toplevel_id       equ wire_all_objects + 13 * RegistryGlobal.sizeof
-    
-    ; static wire_object_types: [WlObjectType; WIRE_MAX_N_OBJECTS]
-    wire_object_types     times WIRE_MAX_N_OBJECTS db WL_OBJECT_TYPE_INVALID
+wire_id:
+    .wl_display                       equ 1
+    .wl_registry                      equ 2
 
-    ; static wire_n_reused_ids: usize = 0
-    wire_n_reused_ids     dq 0
+wire_request:
+    .display_sync_opcode              equ 0
+    .display_get_registry_opcode      equ 1
 
-section .bss
-    wire_id:
-        .wl_display                       equ 1
-        .wl_registry                      equ 2
+    .registry_bind_opcode             equ 0
 
-    wire_request:
-        .display_sync_opcode              equ 0
-        .display_get_registry_opcode      equ 1
+    .compositor_create_surface_opcode equ 0
 
-        .registry_bind_opcode             equ 0
+    .surface_destroy_opcode           equ 0
+    .surface_attach_opcode            equ 1
+    .surface_damage_opcode            equ 2
+    .surface_frame_opcode             equ 3
+    .surface_set_opaque_region_opcode equ 4
+    .surface_set_input_region_opcode  equ 5
+    .surface_commit_opcode            equ 6
 
-        .compositor_create_surface_opcode equ 0
+    .shm_create_pool_opcode           equ 0
 
-        .surface_destroy_opcode           equ 0
-        .surface_attach_opcode            equ 1
-        .surface_damage_opcode            equ 2
-        .surface_frame_opcode             equ 3
-        .surface_set_opaque_region_opcode equ 4
-        .surface_set_input_region_opcode  equ 5
-        .surface_commit_opcode            equ 6
+    .shm_pool_create_buffer_opcode    equ 0
 
-        .shm_create_pool_opcode           equ 0
+    .wm_base_get_xdg_surface_opcode   equ 2
+    .wm_base_pong_opcode              equ 3
 
-        .shm_pool_create_buffer_opcode    equ 0
+    .xdg_surface_get_toplevel_opcode  equ 1
+    .xdg_surface_ack_configure_opcode equ 4
 
-        .wm_base_get_xdg_surface_opcode   equ 2
-        .wm_base_pong_opcode              equ 3
+    .xdg_toplevel_set_title_opcode    equ 2
 
-        .xdg_surface_get_toplevel_opcode  equ 1
-        .xdg_surface_ack_configure_opcode equ 4
+wire_event:
+    .display_error_opcode             equ 0
+    .display_delete_id_opcode         equ 1
 
-        .xdg_toplevel_set_title_opcode    equ 2
+    .callback_done_opcode             equ 0
+    .registry_global_opcode           equ 0
 
-    wire_event:
-        .display_error_opcode             equ 0
-        .display_delete_id_opcode         equ 1
+    .xdg_toplevel_close_opcode        equ 1
 
-        .callback_done_opcode             equ 0
-        .registry_global_opcode           equ 0
+    .wm_base_ping_opcode              equ 0
 
-        .xdg_toplevel_close_opcode        equ 1
+    .xdg_surface_configure_opcode     equ 0
 
-        .wm_base_ping_opcode              equ 0
-
-        .xdg_surface_configure_opcode     equ 0
-
-    ; static wire_message_buffer_len: usize
-    wire_message_buffer_len               resq 1
-
-    ; static wire_current_message_len: usize
-    wire_current_message_len              resq 1
-
-    ; static wire_message_buffer: [u8; WIRE_MESSAGE_BUFFER_SIZE]
-    wire_message_buffer                   resb WIRE_MESSAGE_BUFFER_SIZE
-
-    ; static wire_message_n_fds: usize
-    wire_message_n_fds                    resq 1
-
-    ; static wire_message_fds_header: cmsghdr
-                                          align 8
-    wire_message_fds_header               resb cmsghdr.sizeof
-
-    ; static wire_message_fds: [u32; WIRE_MESSAGE_MAX_N_FDS]
-    wire_message_fds                      resd WIRE_MESSAGE_MAX_N_FDS
-
-    ; static wire_reused_ids: [u32; WIRE_MAX_N_OBJECTS]
-    wire_reused_ids                       resd WIRE_MAX_N_OBJECTS
+extern wire_read_event, wire_dispatch_event, wire_set_dispatcher, wire_get_dispatcher, \
+       wire_handle_display_error, wire_handle_delete_id, wire_display_roundtrip
 
 extern wire_init, wire_deinit
 

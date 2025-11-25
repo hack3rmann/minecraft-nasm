@@ -121,6 +121,30 @@ wire_init:
     %assign i i+1
     %endrep
 
+    ; wire_object_types[wire_id.wl_display] = WlObjectType::Display
+    mov byte [wire_object_types + wire_id.wl_display], WL_OBJECT_TYPE_DISPLAY
+
+    ; wire_object_types[wire_id.wl_registry] = WlObjectType::Registry
+    mov byte [wire_object_types + wire_id.wl_registry], WL_OBJECT_TYPE_REGISTRY
+
+    ; wire_set_dispatcher(
+    ;     WlObjectType::Display,
+    ;     wire_event.display_error_opcode
+    ;     wire_handle_display_error)
+    mov rdi, WL_OBJECT_TYPE_DISPLAY
+    mov rsi, wire_event.display_error_opcode
+    mov rdx, wire_handle_display_error
+    call wire_set_dispatcher
+
+    ; wire_set_dispatcher(
+    ;     WlObjectType::Display,
+    ;     wire_event.display_delete_id_opcode,
+    ;     wire_handle_delete_id)
+    mov rdi, WL_OBJECT_TYPE_DISPLAY
+    mov rsi, wire_event.display_delete_id_opcode
+    mov rdx, wire_handle_delete_id
+    call wire_set_dispatcher
+
     ret
 
 ; #[systemv]

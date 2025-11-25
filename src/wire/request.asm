@@ -68,7 +68,7 @@ wire_send_display_sync:
     call wire_get_next_id
     mov r12, rax
 
-    ; wire_object_types(id) = WlObjectType::Callback
+    ; wire_object_types[id] = WlObjectType::Callback
     mov byte [wire_object_types + r12], WL_OBJECT_TYPE_CALLBACK
 
     ; wire_write_uint(id)

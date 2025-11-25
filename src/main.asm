@@ -7,12 +7,6 @@
 %include "wire.s"
 
 section .rodata
-    display_error_fmt.ptr         db "wayland error: WlDisplayError {{ ", \
-                                     "object_id: {usize}, ", \
-                                     "code: {usize}, ", \
-                                     "message: '{str}' }}", LF
-    display_error_fmt.len         equ $-display_error_fmt.ptr
-
     minecraft_str.ptr             db "Minecraft"
     minecraft_str.len             equ $-minecraft_str.ptr
 
@@ -25,13 +19,6 @@ section .rodata
     xdg_runtime_dir_default_prefix.len  equ $-xdg_runtime_dir_default_prefix
     wayland_display_default             db "wayland-0"
     wayland_display_default.len         equ $-wayland_display_default
-
-    global_fmt      db "RegistryGlobalEvent {{", LF
-                    db "    name: {usize},", LF
-                    db "    interface: '{str}',", LF
-                    db "    version: {usize},", LF
-                    db "}}", LF
-    global_fmt.len  equ $-global_fmt
 
     wl_compositor_str.ptr db "wl_compositor"
     wl_compositor_str.len equ $-wl_compositor_str.ptr
@@ -46,6 +33,10 @@ section .rodata
     dev_shm_path.len      equ $-dev_shm_path.ptr-1
 
     shm_size              equ 640*480*4
+
+section .data
+    ; static is_window_open: bool
+    is_window_open dq 1
 
 section .bss
     ; pub static argc: usize
@@ -68,9 +59,6 @@ section .bss
 
     ; static socket_path: String
     socket_path resb String.sizeof
-
-    ; static message: [u32; 512]
-    message resd 512
 
     addr:
         .sun_family resw 1
@@ -176,76 +164,48 @@ main:
     mov rdx, shm_size
     call set
 
+    ; wire_set_dispatcher(
+    ;     WlObjectType::Registry,
+    ;     wire_event.registry_global_opcode,
+    ;     handle_registry_global)
+    mov rdi, WL_OBJECT_TYPE_REGISTRY
+    mov rsi, wire_event.registry_global_opcode
+    mov rdx, handle_registry_global
+    call wire_set_dispatcher
+
+    ; wire_set_dispatcher(
+    ;     WlObjectType::XdgSurface,
+    ;     wire_event.xdg_surface_configure_opcode,
+    ;     handle_xdg_surface_configure)
+    mov rdi, WL_OBJECT_TYPE_XDG_SURFACE
+    mov rsi, wire_event.xdg_surface_configure_opcode
+    mov rdx, handle_xdg_surface_configure
+    call wire_set_dispatcher
+
+    ; wire_set_dispatcher(
+    ;     WlObjectType::WmBase,
+    ;     wire_event.wm_base_ping_opcode,
+    ;     handle_wm_base_ping)
+    mov rdi, WL_OBJECT_TYPE_WM_BASE
+    mov rsi, wire_event.wm_base_ping_opcode
+    mov rdx, handle_wm_base_ping
+    call wire_set_dispatcher
+
+    ; wire_set_dispatcher(
+    ;     WlObjectType::Toplevel,
+    ;     wire_event.xdg_toplevel_close_opcode,
+    ;     handle_toplevel_close)
+    mov rdi, WL_OBJECT_TYPE_TOPLEVEL
+    mov rsi, wire_event.xdg_toplevel_close_opcode
+    mov rdx, handle_toplevel_close
+    call wire_set_dispatcher
+
     ; _ = wire_send_display_get_registry()
     call wire_send_display_get_registry
 
-    ; let (callback_id := r12) = wire_send_display_sync()
-    call wire_send_display_sync
-    mov r12, rax
-
-    ; wire_flush(display_fd)
+    ; wire_display_roundtrip(display_fd)
     mov rdi, qword [display_fd]
-    call wire_flush
-
-    ; loop {
-    .loop:
-        ; read_event()
-        call read_event
-
-        ; let (event_size := rdi) = message.size
-        movzx rdi, word [message + WireMessageHeader.size]
-
-        ; let (object_id := rdi) = message.object_id
-        xor rdi, rdi
-        mov edi, dword [message + WireMessageHeader.object_id]
-
-        ; let (opcode := rsi) = message.opcode
-        movzx rsi, word [message + WireMessageHeader.opcode]
-
-        ; let (event_id := rdi) = (object_id << 16) | opcode
-        shl rdi, 16
-        or rdi, rsi
-
-        ; // Got wl_display.error
-        ; if event_id == (wire_id.wl_display << 16) | wire_event.display_error_opcode
-        ; { handle_display_error() }
-        cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
-        je handle_display_error
-
-        ; // Got wl_display.global
-        ; if event_id == (wire_id.wl_display << 16) | wire_event.display_delete_id_opcode {
-        cmp rdi, (wire_id.wl_display << 16) | wire_event.display_delete_id_opcode
-        jne .end_if_delete_id
-
-            ; handle_delete_id()
-            call handle_delete_id
-
-        ; }
-        .end_if_delete_id:
-
-        ; // Got wl_registry.global
-        ; if event_id == (wire_id.wl_registry << 16) | wire_event.registry_global_opcode {
-        cmp rdi, (wire_id.wl_registry << 16) | wire_event.registry_global_opcode
-        jne .end_if
-
-            ; handle_registry_global()
-            call handle_registry_global
-
-        ; }
-        .end_if:
-
-        ; // Got wl_callback.done
-        ; if event_id == (callback_id << 16) | wire_event.callback_done_opcode
-        ; { break }
-        mov rax, r12
-        shl rax, 16
-        or rax, wire_event.callback_done_opcode
-        cmp rdi, rax
-        je .end_loop
-
-    ; }
-    jmp .loop
-    .end_loop:
+    call wire_display_roundtrip
 
     ; wl_compositor_id = wire_send_registry_bind_global(&wl_compositor_global)
     mov rdi, wl_compositor_global
@@ -311,15 +271,17 @@ main:
     call wire_send_shm_pool_create_buffer
     mov qword [wl_buffer_id], rax
 
-    ; wire_send_surface_attach(wl_surface_id, wl_buffer_id, 0, 0)
-    mov rdi, qword [wl_surface_id]
-    mov rsi, qword [wl_buffer_id]
-    xor rdx, rdx
-    xor rcx, rcx
-    call wire_send_surface_attach
+    ; while is_window_open {
+    .while:
+    cmp byte [is_window_open], 0
+    je .end_while
 
-    ; loop {
-    .outer_loop:
+        ; wire_send_surface_attach(wl_surface_id, wl_buffer_id, 0, 0)
+        mov rdi, qword [wl_surface_id]
+        mov rsi, qword [wl_buffer_id]
+        xor rdx, rdx
+        xor rcx, rcx
+        call wire_send_surface_attach
     
         ; wire_send_surface_damage(wl_surface_id, 0, 0, 640, 480)
         mov rdi, qword [wl_surface_id]
@@ -333,109 +295,13 @@ main:
         mov rdi, qword [wl_surface_id]
         call wire_send_surface_commit
 
-        ; let (callback_id := r12) = wire_send_display_sync()
-        call wire_send_display_sync
-        mov r12, rax
-
-        ; wire_flush(display_fd)
+        ; wire_display_roundtrip(display_fd)
         mov rdi, qword [display_fd]
-        call wire_flush
-
-        ; loop {
-        .inner_loop:
-            ; read_event()
-            call read_event
-
-            ; let (event_size := rdi) = message.size
-            movzx rdi, word [message + WireMessageHeader.size]
-
-            ; let (object_id := rdi) = message.object_id
-            xor rdi, rdi
-            mov edi, dword [message + WireMessageHeader.object_id]
-
-            ; let (opcode := rsi) = message.opcode
-            movzx rsi, word [message + WireMessageHeader.opcode]
-
-            ; let (event_id := rdi) = (object_id << 16) | opcode
-            shl rdi, 16
-            or rdi, rsi
-
-            ; // Got wl_display.error
-            ; if event_id == (wire_id.wl_display << 16) | wire_event.display_error_opcode
-            ; { handle_display_error() }
-            cmp rdi, (wire_id.wl_display << 16) | wire_event.display_error_opcode
-            je handle_display_error
-
-            ; // Got wl_display.global
-            ; if event_id == (wire_id.wl_display << 16) | wire_event.display_delete_id_opcode {
-            cmp rdi, (wire_id.wl_display << 16) | wire_event.display_delete_id_opcode
-            jne .end_if_delete_id2
-
-                ; handle_delete_id()
-                call handle_delete_id
-
-            ; }
-            .end_if_delete_id2:
-
-            ; // Got wl_callback.done
-            ; if event_id == (callback_id << 16) | wire_event.callback_done_opcode
-            ; { break }
-            mov rax, r12
-            shl rax, 16
-            or rax, wire_event.callback_done_opcode
-            cmp rdi, rax
-            je .end_inner_loop
-
-            ; // Got xdg_surface.configure
-            ; if event_id == (xdg_surface_id << 16) | wire_event.xdg_surface_configure_opcode
-            mov rax, qword [xdg_surface_id]
-            shl rax, 16
-            or rax, wire_event.xdg_surface_configure_opcode
-            cmp rdi, rax
-            jne .end_if_configure
-
-                ; handle_xdg_surface_configure()
-                call handle_xdg_surface_configure
-
-                ; continue
-                jmp .inner_loop
-
-            ; }
-            .end_if_configure:
-
-            ; // Got xdg_surface.configure
-            ; if event_id == (xdg_wm_base_id << 16) | wire_event.wm_base_ping_opcode
-            mov rax, qword [xdg_wm_base_id]
-            shl rax, 16
-            or rax, wire_event.wm_base_ping_opcode
-            cmp rdi, rax
-            jne .end_if_ping
-
-                ; handle_wm_base_ping()
-                call handle_wm_base_ping
-
-                ; continue
-                jmp .inner_loop
-
-            ; }
-            .end_if_ping:
-
-            ; // Got xdg_toplevel.close
-            ; if event_id == (xdg_toplevel_id << 16) | wire_event.xdg_toplevel_close_opcode
-            ; { break }
-            mov rax, qword [xdg_toplevel_id]
-            shl rax, 16
-            or rax, wire_event.xdg_toplevel_close_opcode
-            cmp rdi, rax
-            je .end_outer_loop
-
-        ; }
-        jmp .inner_loop
-        .end_inner_loop:
+        call wire_display_roundtrip
 
     ; }
-    .end_outer_loop:
-    jmp .outer_loop
+    jmp .while
+    .end_while:
 
     ; munmap(shm_ptr, shm_size)
     mov rax, SYSCALL_MUNMAP
@@ -568,7 +434,7 @@ get_wayland_socket_path:
     ret
 
 ; #[systemv]
-; fn handle_registry_global()
+; fn handle_registry_global((_registry_id := rdi): u32)
 handle_registry_global:
     PUSH r12, r13, rbp
     mov rbp, rsp
@@ -593,31 +459,31 @@ handle_registry_global:
     ; }
     sub rsp, .stack_size
 
-    ; fmt_args.name = message.body.name
+    ; fmt_args.name = wire_message.body.name
     xor rax, rax
-    mov eax, dword [message + WireMessageHeader.sizeof + RegistryGlobalEvent.name]
+    mov eax, dword [wire_message + WireMessageHeader.sizeof + RegistryGlobalEvent.name]
     mov qword [rbp + .fmt_args + GlobalFmtArgs.name], rax
 
-    ; fmt_args.interface.len = message.body.interface.len - 1
+    ; fmt_args.interface.len = wire_message.body.interface.len - 1
     xor rax, rax
-    mov eax, dword [message + WireMessageHeader.sizeof + RegistryGlobalEvent.interface.len]
+    mov eax, dword [wire_message + WireMessageHeader.sizeof + RegistryGlobalEvent.interface.len]
     dec rax
     mov qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.len], rax
 
     ; let (interface_len := r8) = fmt_args.interface.len - 1
     mov r8, rax
 
-    ; fmt_args.interface.ptr = &message.body.interface
+    ; fmt_args.interface.ptr = &wire_message.body.interface
     mov qword [rbp + .fmt_args + GlobalFmtArgs.interface + Str.ptr], \
-        message + WireMessageHeader.sizeof + RegistryGlobalEvent.interface
+        wire_message + WireMessageHeader.sizeof + RegistryGlobalEvent.interface
 
     ; let (string_block_size := r8) = (interface_len + 3) / 4
     add r8, 3
     shr r8, 2
 
-    ; fmt_args.version = message.body.version
+    ; fmt_args.version = wire_message.body.version
     xor rax, rax
-    mov eax, dword [message + WireMessageHeader.sizeof + RegistryGlobalEvent.sizeof + 4*r8]
+    mov eax, dword [wire_message + WireMessageHeader.sizeof + RegistryGlobalEvent.sizeof + 4*r8]
     mov qword [rbp + .fmt_args + GlobalFmtArgs.version], rax
 
     ; let (interface_name := r12:r13) = fmt_args.interface
@@ -709,39 +575,39 @@ handle_registry_global:
     ret
 
 ; #[systemv]
-; fn handle_xdg_surface_configure()
+; fn handle_xdg_surface_configure((xdg_surface_id := rdi): u32)
 handle_xdg_surface_configure:
-    ; let (serial := rsi) = message.body.serial
+    ; let (serial := rsi) = wire_message.body.serial
     xor rsi, rsi
-    mov esi, dword [message + WireMessageHeader.sizeof + XdgSurfaceConfigureEvent.serial]
+    mov esi, dword [wire_message + WireMessageHeader.sizeof + XdgSurfaceConfigureEvent.serial]
 
     ; wire_send_xdg_surface_ack_configure(xdg_surface_id, serial)
-    mov rdi, qword [xdg_surface_id]
+    ; mov rdi, rdi
     ; mov rsi, rsi
     call wire_send_xdg_surface_ack_configure
     
     ret
 
 ; #[systemv]
-; fn handle_wm_base_ping()
+; fn handle_wm_base_ping((wm_base_id := rdi): u32)
 handle_wm_base_ping:
-    ; let (serial := rsi) = message.body.serial
+    ; let (serial := rsi) = wire_message.body.serial
     xor rsi, rsi
-    mov esi, dword [message + WireMessageHeader.sizeof + WmBasePingEvent.serial]
+    mov esi, dword [wire_message + WireMessageHeader.sizeof + WmBasePingEvent.serial]
 
-    ; wire_send_wm_base_pong(xdg_wm_base_id, serial)
-    mov rdi, qword [xdg_wm_base_id]
+    ; wire_send_wm_base_pong(wm_base_id, serial)
+    ; mov rdi, rdi
     ; mov rsi, rsi
     call wire_send_wm_base_pong
     
     ret
 
 ; #[systemv]
-; fn handle_delete_id()
+; fn handle_delete_id((_display_id := rdi): u32)
 handle_delete_id:
-    ; let (id := rdi) = message.body.id
+    ; let (id := rdi) = wire_message.body.id
     xor rdi, rdi
-    mov edi, dword [message + WireMessageHeader.sizeof + DisplayDeleteIdEvent.id]
+    mov edi, dword [wire_message + WireMessageHeader.sizeof + DisplayDeleteIdEvent.id]
 
     ; wire_release_id(id)
     ; mov rdi, rdi
@@ -749,102 +615,11 @@ handle_delete_id:
 
     ret
 
-; #[jumpable]
-; #[noreturn]
-; fn handle_display_error()
-handle_display_error:
-    PUSH rbp
-    mov rbp, rsp
-
-    .fmt_args       equ -32
-
-    .object_id      equ .fmt_args
-    .code           equ .fmt_args + 8
-    .message.len    equ .fmt_args + 16
-    .message.ptr    equ .fmt_args + 24
-
-    .stack_size     equ ALIGNED(-.fmt_args)
-
-    ; let fmt_args: struct {
-    ;     object_id: usize,
-    ;     code: usize
-    ;     message: Str,
-    ; }
-    sub rsp, .stack_size
-
-    ; message.ptr = &message.body.message
-    mov qword [rbp + .message.ptr], \
-        message + WireMessageHeader.sizeof + DisplayErrorEvent.message
-
-    ; message.len = message.body.message.len as usize
-    xor rax, rax
-    mov eax, dword [message + WireMessageHeader.sizeof + DisplayErrorEvent.message.len]
-    mov qword [rbp + .message.len], rax
-
-    ; object_id = message.body.object_id
-    xor rax, rax
-    mov eax, dword [message + WireMessageHeader.sizeof + DisplayErrorEvent.object_id]
-    mov qword [rbp + .object_id], rax
-
-    ; code = message.body.code
-    xor rax, rax
-    mov eax, dword [message + WireMessageHeader.sizeof + DisplayErrorEvent.code]
-    mov qword [rbp + .code], rax
-
-    ; format_buffer.clear()
-    mov rdi, format_buffer
-    call String_clear
-
-    ; format_buffer.format_array(display_error_fmt, &fmt_args)
-    mov rdi, format_buffer
-    mov rsi, display_error_fmt.len
-    mov rdx, display_error_fmt.ptr
-    lea rcx, [rbp + .fmt_args]
-    call String_format_array
-
-    ; write(STDOUT, format_buffer.ptr, format_buffer.len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, qword [format_buffer + String.ptr]
-    mov rdx, qword [format_buffer + String.len]
-    syscall
-    call exit_on_error
-
-    ; abort()
-    jmp abort
-
 ; #[systemv]
-; fn read_event()
-read_event:
-    ; let (n_read := rax) = read(display_fd, &message, WireMessageHeader::HEADER_SIZE)
-    mov rax, SYSCALL_READ
-    mov rdi, qword [display_fd]
-    mov rsi, message
-    mov rdx, WireMessageHeader.sizeof
-    syscall
-    call exit_on_error
-
-    ; assert n_read == WireMessageHeader::HEADER_SIZE
-    cmp rax, WireMessageHeader.sizeof
-    jne abort
-
-    ; let (body_size := rdx) = message.size
-    movzx rdx, word [message + WireMessageHeader.size]
-
-    ; body_size -= WireMessageHeader::HEADER_SIZE
-    sub rdx, WireMessageHeader.sizeof
-
-    ; let (n_read := rax) = read(display_fd, &message + WireMessageHeader::HEADER_SIZE, body_size)
-    mov rax, SYSCALL_READ
-    mov rdi, qword [display_fd]
-    mov rsi, message + WireMessageHeader.sizeof
-    ; mov rdx, rdx
-    syscall
-    call exit_on_error
-
-    ; assert n_read == body_size
-    cmp rax, rdx
-    jne abort
+; fn handle_toplevel_close((_toplevel_id := rdi): u32)
+handle_toplevel_close:
+    ; is_window_open = false
+    mov byte [is_window_open], 0
 
     ret
 
