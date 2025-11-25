@@ -96,6 +96,10 @@ LF                           equ 10
 section .rodata
     newline db LF
 
+extern format_buffer
+
+extern init_format, deinit_format
+
 extern print_uint_hex, print_uint, print_newline
 
 %endif ; !_DEBUG_INC

@@ -72,9 +72,6 @@ section .bss
     ; static message: [u32; 512]
     message resd 512
 
-    ; static format_buffer: String
-    format_buffer resb String.sizeof
-
     addr:
         .sun_family resw 1
         .sun_path   resb 254
@@ -159,9 +156,8 @@ RegistryGlobal_drop:
 ; #[systemv]
 ; fn main() -> i64
 main:
-    ; format_buffer = String::new()
-    mov rdi, format_buffer
-    call String_new
+    ; init_format()
+    call init_format
 
     ; wl_compositor_global = RegistryGlobal::new()
     mov rdi, wl_compositor_global
@@ -499,7 +495,7 @@ main:
         .end_inner_loop:
 
     ; }
-    .end_outer_loop
+    .end_outer_loop:
     jmp .outer_loop
 
     ; munmap(shm_ptr, shm_size)
@@ -537,9 +533,8 @@ main:
     mov rdi, wl_compositor_global
     call RegistryGlobal_drop
 
-    ; drop(format_buffer)
-    mov rdi, format_buffer
-    call String_drop
+    ; deinit_format()
+    call deinit_format
 
     ; return EXIT_SUCCESS
     xor rax, rax
