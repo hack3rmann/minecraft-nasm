@@ -146,7 +146,7 @@ main:
     xor rdi, rdi
     mov rsi, shm_size
     mov rdx, PROT_READ | PROT_WRITE
-    mov rcx, MAP_SHARED
+    mov r10, MAP_SHARED
     mov r8, qword [shm_fd]
     xor r9, r9
     syscall
@@ -320,8 +320,6 @@ main:
         ; wire_send_surface_commit(wl_surface_id)
         mov rdi, qword [wl_surface_id]
         call wire_send_surface_commit
-
-        DEBUG_STR_INLINE "surface.commit"
 
         ; wire_display_roundtrip(display_fd)
         mov rdi, qword [display_fd]
@@ -610,8 +608,6 @@ handle_buffer_release:
 ; #[systemv]
 ; fn handle_xdg_surface_configure((xdg_surface_id := rdi): u32)
 handle_xdg_surface_configure:
-    DEBUG_STR_INLINE "xdg_surface.configure"
-
     ; let (serial := rsi) = wire_message.body.serial
     xor rsi, rsi
     mov esi, dword [wire_message + WireMessageHeader.sizeof + XdgSurfaceConfigureEvent.serial]
@@ -640,21 +636,6 @@ handle_wm_base_ping:
 ; #[systemv]
 ; fn handle_toplevel_configure((toplevel_id := rdi): u32)
 handle_toplevel_configure:
-    DEBUG_STR_INLINE "xdg_toplevel.configure"
-
-    xor rax, rax
-    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width]
-    DEBUG_UINT rax
-
-    xor rax, rax
-    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height]
-    DEBUG_UINT rax
-
-    xor rax, rax
-    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.states.len]
-    shr rax, 2
-    DEBUG_UINT rax
-
     ret
 
 ; #[systemv]

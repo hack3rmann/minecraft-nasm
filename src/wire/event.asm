@@ -79,9 +79,6 @@ wire_dispatch_event:
     movzx r8, byte [wire_object_types + r12]
     movzx r9, word [wire_message + WireMessageHeader.opcode]
 
-    ; DEBUG_UINT r8
-    ; DEBUG_UINT r9
-
     ; if dispatch == null { return }
     test rax, rax
     jz .exit
