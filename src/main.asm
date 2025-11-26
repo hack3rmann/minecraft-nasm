@@ -8,8 +8,8 @@
 %include "shm.s"
 
 section .rodata
-    minecraft_str.ptr             db "Minecraft"
-    minecraft_str.len             equ $-minecraft_str.ptr
+    minecraft_str.ptr     db "Minecraft"
+    minecraft_str.len     equ $-minecraft_str.ptr
 
     wl_compositor_str.ptr db "wl_compositor"
     wl_compositor_str.len equ $-wl_compositor_str.ptr
