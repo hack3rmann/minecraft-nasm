@@ -698,22 +698,31 @@ handle_wm_base_ping:
 handle_toplevel_configure:
     PUSH r12
 
-    ; let (shm_size := r12) = 4 * wire_message.width * wire_message.height
+    ; if wire_message.width == 0 { return }
+    cmp dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width], 0
+    je .exit
+
+    ; if wire_message.height == 0 { return }
+    cmp dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height], 0
+    je .exit
+
+    ; let (shm_size := r12) = sizeof(u32) * width * height
     mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width]
     mov esi, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height]
     mul rsi
     lea r12, [4 * rax]
 
-    DEBUG_UINT qword [wl_shm_pool_id]
+    ; wire_send_buffer_destroy(wl_buffer_id)
+    mov rdi, qword [wl_buffer_id]
+    call wire_send_buffer_destroy
 
-    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width]
-    DEBUG_UINT rax
+    ; wire_send_shm_pool_destroy(wl_shm_pool_id)
+    mov rdi, qword [wl_shm_pool_id]
+    call wire_send_shm_pool_destroy
 
-    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height]
-    DEBUG_UINT rax
-
-    DEBUG_UINT r12
-    DEBUG_NEWLINE
+    ; wire_flush(display_fd)
+    mov rdi, qword [display_fd]
+    call wire_flush
 
     ; drop(shm)
     mov rdi, shm
@@ -723,14 +732,6 @@ handle_toplevel_configure:
     mov rdi, shm
     mov rsi, r12
     call Shm_new
-
-    ; wire_send_buffer_destroy(wl_buffer_id)
-    mov rdi, qword [wl_buffer_id]
-    call wire_send_buffer_destroy
-
-    ; wire_send_shm_pool_destroy(wl_shm_pool_id)
-    mov rdi, qword [wl_shm_pool_id]
-    call wire_send_shm_pool_destroy
 
     ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm.fd, shm_size)
     mov rdi, qword [wl_shm_id]
@@ -755,6 +756,7 @@ handle_toplevel_configure:
     call wire_send_shm_pool_create_buffer
     mov qword [wl_buffer_id], rax
 
+    .exit:
     POP r12
     ret
 
