@@ -68,6 +68,14 @@ struc XdgSurfaceConfigureEvent
     .sizeof         equ $-.serial
 endstruc
 
+struc XdgToplevelConfigureEvent
+    .width          resd 1
+    .height         resd 1
+    .states.len     resd 1
+    .states         resd 0
+    .sizeof         equ $-.width
+endstruc
+
 struc XdgToplevelCloseEvent
     .pad            resb 0
     .sizeof         equ $-.pad
@@ -146,6 +154,7 @@ wire_event:
 
     .buffer_release_opcode            equ 0
 
+    .xdg_toplevel_configure_opcode    equ 0
     .xdg_toplevel_close_opcode        equ 1
 
     .wm_base_ping_opcode              equ 0

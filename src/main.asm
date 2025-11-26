@@ -203,6 +203,15 @@ main:
     call wire_set_dispatcher
 
     ; wire_set_dispatcher(
+    ;     WlObjectType::Toplevel,
+    ;     wire_event.xdg_toplevel_configure_opcode,
+    ;     handle_toplevel_configure)
+    mov rdi, WL_OBJECT_TYPE_TOPLEVEL
+    mov rsi, wire_event.xdg_toplevel_configure_opcode
+    mov rdx, handle_toplevel_configure
+    call wire_set_dispatcher
+
+    ; wire_set_dispatcher(
     ;     WlObjectType::Buffer,
     ;     wire_event.buffer_release_opcode,
     ;     handle_buffer_release)
@@ -311,6 +320,8 @@ main:
         ; wire_send_surface_commit(wl_surface_id)
         mov rdi, qword [wl_surface_id]
         call wire_send_surface_commit
+
+        DEBUG_STR_INLINE "surface.commit"
 
         ; wire_display_roundtrip(display_fd)
         mov rdi, qword [display_fd]
@@ -599,6 +610,8 @@ handle_buffer_release:
 ; #[systemv]
 ; fn handle_xdg_surface_configure((xdg_surface_id := rdi): u32)
 handle_xdg_surface_configure:
+    DEBUG_STR_INLINE "xdg_surface.configure"
+
     ; let (serial := rsi) = wire_message.body.serial
     xor rsi, rsi
     mov esi, dword [wire_message + WireMessageHeader.sizeof + XdgSurfaceConfigureEvent.serial]
@@ -622,6 +635,26 @@ handle_wm_base_ping:
     ; mov rsi, rsi
     call wire_send_wm_base_pong
     
+    ret
+
+; #[systemv]
+; fn handle_toplevel_configure((toplevel_id := rdi): u32)
+handle_toplevel_configure:
+    DEBUG_STR_INLINE "xdg_toplevel.configure"
+
+    xor rax, rax
+    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width]
+    DEBUG_UINT rax
+
+    xor rax, rax
+    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height]
+    DEBUG_UINT rax
+
+    xor rax, rax
+    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.states.len]
+    shr rax, 2
+    DEBUG_UINT rax
+
     ret
 
 ; #[systemv]
