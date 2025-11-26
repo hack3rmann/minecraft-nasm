@@ -5,20 +5,11 @@
 %include "string.s"
 %include "env.s"
 %include "wire.s"
+%include "shm.s"
 
 section .rodata
     minecraft_str.ptr             db "Minecraft"
     minecraft_str.len             equ $-minecraft_str.ptr
-
-    xdg_runtime_dir_str           db "XDG_RUNTIME_DIR"
-    xdg_runtime_dir_str.len       equ $-xdg_runtime_dir_str
-    wayland_display_str           db "WAYLAND_DISPLAY"
-    wayland_display_str.len       equ $-wayland_display_str
-
-    xdg_runtime_dir_default_prefix      db "/run/user/"
-    xdg_runtime_dir_default_prefix.len  equ $-xdg_runtime_dir_default_prefix
-    wayland_display_default             db "wayland-0"
-    wayland_display_default.len         equ $-wayland_display_default
 
     wl_compositor_str.ptr db "wl_compositor"
     wl_compositor_str.len equ $-wl_compositor_str.ptr
@@ -29,24 +20,13 @@ section .rodata
     xdg_wm_base_str.ptr   db "xdg_wm_base"
     xdg_wm_base_str.len   equ $-xdg_wm_base_str.ptr
 
-    dev_shm_path.ptr      db "/dev/shm/minecraft", 0
-    dev_shm_path.len      equ $-dev_shm_path.ptr-1
-
-    window_width          equ 3000
-    window_height         equ 2000
+    window_width          equ 640
+    window_height         equ 480
     shm_size              equ 4 * window_width * window_height
 
 section .data
     ; static is_window_open: bool
     is_window_open dq 1
-
-struc Shm
-    .fd                     resq 1
-    .size                   resq 1
-    .ptr                    resq 1
-    .sizeof                 equ $-.fd
-    .alignof                equ 8
-endstruc
 
 section .bss
     ; pub static argc: usize
@@ -80,111 +60,6 @@ section .bss
     shm resb Shm.sizeof
 
 section .text
-
-; #[systemv]
-; fn Shm::new(($ret := rdi): *mut Shm, (shm_size := rsi): usize) -> Shm
-Shm_new:
-    PUSH r12, r13
-
-    ; mov ($ret := r12) = $ret
-    mov r12, rdi
-
-    ; mov (shm_size := r13) = shm_size
-    mov r13, rsi
-
-    ; $ret.fd = open(dev_shm_path.ptr, O_CREAT | O_RDWR | O_EXCL, 0o600)
-    mov rax, SYSCALL_OPEN
-    mov rdi, dev_shm_path.ptr
-    mov rsi, O_CREAT | O_RDWR | O_EXCL
-    mov rdx, 0o600
-    syscall
-    call exit_on_error
-    mov qword [r12 + Shm.fd], rax
-
-    ; ftruncate($ret->fd, shm_size)
-    mov rax, SYSCALL_FTRUNCATE
-    mov rdi, qword [r12 + Shm.fd]
-    mov rsi, r13
-    syscall
-    call exit_on_error
-
-    ; $ret->ptr = mmap(
-    ;     null,
-    ;     shm_size,
-    ;     PROT_READ | PROT_WRITE,
-    ;     MAP_SHARED,
-    ;     $ret->fd,
-    ;     0)
-    mov rax, SYSCALL_MMAP
-    xor rdi, rdi
-    mov rsi, r13
-    mov rdx, PROT_READ | PROT_WRITE
-    mov r10, MAP_SHARED
-    mov r8, qword [r12 + Shm.fd]
-    xor r9, r9
-    syscall
-    mov qword [r12 + Shm.ptr], rax
-
-    ; assert $ret->ptr != MMAP_FAILED
-    cmp qword [r12 + Shm.ptr], MAP_FAILED
-    je abort
-
-    ; assert $ret->ptr != null
-    cmp qword [r12 + Shm.ptr], 0
-    je abort
-
-    ; unlink(dev_shm_path.ptr)
-    mov rax, SYSCALL_UNLINK
-    mov rdi, dev_shm_path.ptr
-    syscall
-    call exit_on_error
-
-    ; set($ret->ptr, 0xFF, shm_size)
-    mov rdi, qword [r12 + Shm.ptr]
-    mov rsi, 0xFF
-    mov rdx, r13
-    call set
-    
-    ; $ret->size = shm_size
-    mov qword [r12 + Shm.size], r13
-
-    POP r13, r12
-    ret
-
-; #[systemv]
-; fn Shm::drop(&mut self := rdi)
-Shm_drop:
-    PUSH r12
-
-    ; let (self := r12) = self
-    mov r12, rdi
-
-    ; if self.ptr == null { return }
-    cmp qword [r12 + Shm.ptr], 0
-    je .exit
-
-    ; munmap(self.ptr, self.size)
-    mov rax, SYSCALL_MUNMAP
-    mov rdi, qword [r12 + Shm.ptr]
-    mov rsi, qword [r12 + Shm.size]
-    syscall
-    call exit_on_error
-
-    ; close(self.fd)
-    mov rax, SYSCALL_CLOSE
-    mov rdi, qword [r12 + Shm.fd]
-    syscall
-    call exit_on_error
-
-    ; self.ptr = null
-    mov qword [r12 + Shm.ptr], 0
-
-    ; self.fd = 0
-    mov qword [r12 + Shm.fd], 0
-
-    .exit:
-    POP r12
-    ret
 
 ; #[systemv]
 ; fn main() -> i64
@@ -420,103 +295,6 @@ main:
 
     ; return EXIT_SUCCESS
     xor rax, rax
-    ret
-
-; #[systemv]
-; fn get_wayland_socket_path(($ret := rdi): *mut String) -> String
-get_wayland_socket_path:
-    PUSH r12, r13, r14
-
-    ; let ($ret := r12) = $ret
-    mov r12, rdi
-
-    ; $ret = String::new()
-    mov rdi, r12
-    call String_new
-
-    ; let (runtime_dir := r13) = get_env("XDG_RUNTIME_DIR", .len)
-    mov rdi, xdg_runtime_dir_str
-    mov rdx, xdg_runtime_dir_str.len
-    call get_env
-    mov r13, rsi
-
-    ; if runtime_dir != null {
-    test r13, r13
-    jz .runtime_else
-
-        ; let (runtime_dir_len := r14) = cstr_len(runtime_dir)
-        mov rsi, r13
-        call cstr_len
-        mov r14, rdx
-
-        ; $ret.push_str(Str { runtime_dir_len, runtime_dir })
-        mov rdi, r12
-        mov rsi, r14
-        mov rdx, r13
-        call String_push_str
-
-    ; } else {
-    jmp .runtime_end_if
-    .runtime_else:
-
-        ; $ret.push_str(xdg_runtime_dir_default_prefix)
-        mov rdi, r12
-        mov rsi, xdg_runtime_dir_default_prefix.len
-        mov rdx, xdg_runtime_dir_default_prefix
-        call String_push_str
-
-        ; let (uid := rax) = getuid()
-        mov rax, SYSCALL_GETUID
-        syscall
-
-        ; $ret.format_u64(uid)
-        mov rdi, r12
-        mov rsi, rax
-        call String_format_u64
-
-    ; }
-    .runtime_end_if:
-
-    ; $ret.push_ascii('/')
-    mov rdi, r12
-    mov rsi, "/"
-    call String_push_ascii
-
-    ; let (wayland_display := r13) = get_env("WAYLAND_DISPLAY", .len)
-    mov rdi, wayland_display_str
-    mov rdx, wayland_display_str.len
-    call get_env
-    mov r13, rsi
-
-    ; if wayland_display != null {
-    test r13, r13
-    jz .display_else
-
-        ; let (wayland_display_len := r14) = cstr_len(wayland_display)
-        mov rsi, r13
-        call cstr_len
-        mov r14, rdx
-
-        ; $ret.push_str(Str { wayland_display_len, wayland_display })
-        mov rdi, r12
-        mov rsi, r14
-        mov rdx, r13
-        call String_push_str
-
-    ; } else {
-    jmp .display_end_if
-    .display_else:
-
-        ; $ret.push_str(wayland_display_default)
-        mov rdi, r12
-        mov rsi, wayland_display_default.len
-        mov rdx, wayland_display_default
-        call String_push_str
-
-    ; }
-    .display_end_if:
-
-    POP r14, r13, r12
     ret
 
 ; #[systemv]

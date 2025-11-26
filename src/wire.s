@@ -166,6 +166,8 @@ wire_event:
 
     .xdg_surface_configure_opcode     equ 0
 
+extern get_wayland_socket_path
+
 extern wire_read_event, wire_dispatch_event, wire_set_dispatcher, wire_get_dispatcher, \
        wire_handle_display_error, wire_handle_delete_id, wire_display_roundtrip
 
