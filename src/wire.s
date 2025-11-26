@@ -95,20 +95,24 @@ extern wire_last_id, wire_all_objects, wire_object_types, wire_n_reused_ids, wir
        wire_message_buffer_len, wire_current_message_len, wire_message_buffer, wire_message_n_fds, \
        wire_message_fds_header, wire_message_fds, wire_reused_ids, wire_message
 
-wl_compositor_global  equ wire_all_objects + 0 * RegistryGlobal.sizeof
-wl_shm_global         equ wire_all_objects + 1 * RegistryGlobal.sizeof
-xdg_wm_base_global    equ wire_all_objects + 2 * RegistryGlobal.sizeof
-wl_compositor_id      equ wire_all_objects + 3 * RegistryGlobal.sizeof
-wl_shm_id             equ wire_all_objects + 4 * RegistryGlobal.sizeof
-wl_shm_pool_id        equ wire_all_objects + 5 * RegistryGlobal.sizeof
-shm_id                equ wire_all_objects + 6 * RegistryGlobal.sizeof
-shm_fd                equ wire_all_objects + 7 * RegistryGlobal.sizeof
-shm_ptr               equ wire_all_objects + 8 * RegistryGlobal.sizeof
-wl_surface_id         equ wire_all_objects + 9 * RegistryGlobal.sizeof
-wl_buffer_id          equ wire_all_objects + 10 * RegistryGlobal.sizeof
-xdg_wm_base_id        equ wire_all_objects + 11 * RegistryGlobal.sizeof
-xdg_surface_id        equ wire_all_objects + 12 * RegistryGlobal.sizeof
-xdg_toplevel_id       equ wire_all_objects + 13 * RegistryGlobal.sizeof
+%assign WIRE_N_WL_GLOBALS 0
+
+%macro WIRE_ALLOC_WL_OBJECT 1
+    %1 equ wire_all_objects + WIRE_N_WL_GLOBALS * RegistryGlobal.sizeof
+    %assign WIRE_N_WL_GLOBALS WIRE_N_WL_GLOBALS+1
+%endmacro
+
+WIRE_ALLOC_WL_OBJECT wl_compositor_global
+WIRE_ALLOC_WL_OBJECT wl_shm_global
+WIRE_ALLOC_WL_OBJECT xdg_wm_base_global
+WIRE_ALLOC_WL_OBJECT wl_compositor_id
+WIRE_ALLOC_WL_OBJECT wl_shm_id
+WIRE_ALLOC_WL_OBJECT wl_shm_pool_id
+WIRE_ALLOC_WL_OBJECT wl_surface_id
+WIRE_ALLOC_WL_OBJECT wl_buffer_id
+WIRE_ALLOC_WL_OBJECT xdg_wm_base_id
+WIRE_ALLOC_WL_OBJECT xdg_surface_id
+WIRE_ALLOC_WL_OBJECT xdg_toplevel_id
 
 wire_id:
     .wl_display                       equ 1
@@ -133,6 +137,7 @@ wire_request:
     .shm_create_pool_opcode           equ 0
 
     .shm_pool_create_buffer_opcode    equ 0
+    .shm_pool_destroy_opcode          equ 1
 
     .buffer_destroy_opcode            equ 0
 
@@ -183,7 +188,7 @@ extern wire_send_surface_attach, wire_send_surface_damage, wire_send_surface_com
 
 extern wire_send_shm_create_pool
 
-extern wire_send_shm_pool_create_buffer
+extern wire_send_shm_pool_create_buffer, wire_send_shm_pool_destroy
 
 extern wire_send_buffer_destroy
 

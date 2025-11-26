@@ -32,13 +32,21 @@ section .rodata
     dev_shm_path.ptr      db "/dev/shm/minecraft", 0
     dev_shm_path.len      equ $-dev_shm_path.ptr-1
 
-    window_width          equ 2500
-    window_height         equ 1613
+    window_width          equ 3000
+    window_height         equ 2000
     shm_size              equ 4 * window_width * window_height
 
 section .data
     ; static is_window_open: bool
     is_window_open dq 1
+
+struc Shm
+    .fd                     resq 1
+    .size                   resq 1
+    .ptr                    resq 1
+    .sizeof                 equ $-.fd
+    .alignof                equ 8
+endstruc
 
 section .bss
     ; pub static argc: usize
@@ -53,11 +61,11 @@ section .bss
     global envp
     envp resq 1
 
-    ; static display_fd: usize
-    display_fd resq 1
-
     ; static stack_align: usize
     stack_align resq 1
+
+    ; static display_fd: usize
+    display_fd resq 1
 
     ; static socket_path: String
     socket_path resb String.sizeof
@@ -67,7 +75,116 @@ section .bss
         .sun_path   resb 254
     addr_max_len    equ $-addr
 
+    ; static shm: Shm
+    align Shm.alignof
+    shm resb Shm.sizeof
+
 section .text
+
+; #[systemv]
+; fn Shm::new(($ret := rdi): *mut Shm, (shm_size := rsi): usize) -> Shm
+Shm_new:
+    PUSH r12, r13
+
+    ; mov ($ret := r12) = $ret
+    mov r12, rdi
+
+    ; mov (shm_size := r13) = shm_size
+    mov r13, rsi
+
+    ; $ret.fd = open(dev_shm_path.ptr, O_CREAT | O_RDWR | O_EXCL, 0o600)
+    mov rax, SYSCALL_OPEN
+    mov rdi, dev_shm_path.ptr
+    mov rsi, O_CREAT | O_RDWR | O_EXCL
+    mov rdx, 0o600
+    syscall
+    call exit_on_error
+    mov qword [r12 + Shm.fd], rax
+
+    ; ftruncate($ret->fd, shm_size)
+    mov rax, SYSCALL_FTRUNCATE
+    mov rdi, qword [r12 + Shm.fd]
+    mov rsi, r13
+    syscall
+    call exit_on_error
+
+    ; $ret->ptr = mmap(
+    ;     null,
+    ;     shm_size,
+    ;     PROT_READ | PROT_WRITE,
+    ;     MAP_SHARED,
+    ;     $ret->fd,
+    ;     0)
+    mov rax, SYSCALL_MMAP
+    xor rdi, rdi
+    mov rsi, r13
+    mov rdx, PROT_READ | PROT_WRITE
+    mov r10, MAP_SHARED
+    mov r8, qword [r12 + Shm.fd]
+    xor r9, r9
+    syscall
+    mov qword [r12 + Shm.ptr], rax
+
+    ; assert $ret->ptr != MMAP_FAILED
+    cmp qword [r12 + Shm.ptr], MAP_FAILED
+    je abort
+
+    ; assert $ret->ptr != null
+    cmp qword [r12 + Shm.ptr], 0
+    je abort
+
+    ; unlink(dev_shm_path.ptr)
+    mov rax, SYSCALL_UNLINK
+    mov rdi, dev_shm_path.ptr
+    syscall
+    call exit_on_error
+
+    ; set($ret->ptr, 0xFF, shm_size)
+    mov rdi, qword [r12 + Shm.ptr]
+    mov rsi, 0xFF
+    mov rdx, r13
+    call set
+    
+    ; $ret->size = shm_size
+    mov qword [r12 + Shm.size], r13
+
+    POP r13, r12
+    ret
+
+; #[systemv]
+; fn Shm::drop(&mut self := rdi)
+Shm_drop:
+    PUSH r12
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; if self.ptr == null { return }
+    cmp qword [r12 + Shm.ptr], 0
+    je .exit
+
+    ; munmap(self.ptr, self.size)
+    mov rax, SYSCALL_MUNMAP
+    mov rdi, qword [r12 + Shm.ptr]
+    mov rsi, qword [r12 + Shm.size]
+    syscall
+    call exit_on_error
+
+    ; close(self.fd)
+    mov rax, SYSCALL_CLOSE
+    mov rdi, qword [r12 + Shm.fd]
+    syscall
+    call exit_on_error
+
+    ; self.ptr = null
+    mov qword [r12 + Shm.ptr], 0
+
+    ; self.fd = 0
+    mov qword [r12 + Shm.fd], 0
+
+    .exit:
+    POP r12
+    ret
 
 ; #[systemv]
 ; fn main() -> i64
@@ -104,7 +221,7 @@ main:
     call exit_on_error
     mov qword [display_fd], rax
 
-    ; connect(display_fd, &const addr, 2 + socket_path.len)
+    ; connect(display_fd, &addr, 2 + socket_path.len)
     mov rax, SYSCALL_CONNECT
     mov rdi, qword [display_fd]
     mov rsi, addr
@@ -113,58 +230,10 @@ main:
     syscall
     call exit_on_error
 
-    ; shm_fd = open(dev_shm_path.ptr, O_CREAT | O_RDWR | O_EXCL, 0o600)
-    mov rax, SYSCALL_OPEN
-    mov rdi, dev_shm_path.ptr
-    mov rsi, O_CREAT | O_RDWR | O_EXCL
-    mov rdx, 0o600
-    syscall
-    call exit_on_error
-    mov qword [shm_fd], rax
-
-    ; ftruncate(shm_fd, shm_size)
-    mov rax, SYSCALL_FTRUNCATE
-    mov rdi, qword [shm_fd]
+    ; shm = Shm::new(shm_size)
+    mov rdi, shm
     mov rsi, shm_size
-    syscall
-    call exit_on_error
-
-    ; unlink(dev_shm_path.ptr)
-    mov rax, SYSCALL_UNLINK
-    mov rdi, dev_shm_path.ptr
-    syscall
-    call exit_on_error
-
-    ; shm_ptr = mmap(
-    ;     null,
-    ;     shm_size,
-    ;     PROT_READ | PROT_WRITE,
-    ;     MAP_SHARED,
-    ;     shm_fd,
-    ;     0)
-    mov rax, SYSCALL_MMAP
-    xor rdi, rdi
-    mov rsi, shm_size
-    mov rdx, PROT_READ | PROT_WRITE
-    mov r10, MAP_SHARED
-    mov r8, qword [shm_fd]
-    xor r9, r9
-    syscall
-    mov qword [shm_ptr], rax
-
-    ; assert shm_ptr != MMAP_FAILED
-    cmp qword [shm_ptr], MAP_FAILED
-    je abort
-
-    ; assert shm_ptr != null
-    cmp qword [shm_ptr], 0
-    je abort
-
-    ; set(shm_ptr, 0xFF, shm_size)
-    mov rdi, qword [shm_ptr]
-    mov rsi, 0xFF
-    mov rdx, shm_size
-    call set
+    call Shm_new
 
     ; wire_set_dispatcher(
     ;     WlObjectType::Registry,
@@ -274,9 +343,9 @@ main:
     mov rdx, minecraft_str.ptr
     call wire_send_xdg_toplevel_set_app_id
 
-    ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm_fd, shm_size)
+    ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm.fd, shm_size)
     mov rdi, qword [wl_shm_id]
-    mov rsi, qword [shm_fd]
+    mov rsi, qword [shm + Shm.fd]
     mov rdx, shm_size
     call wire_send_shm_create_pool
     mov qword [wl_shm_pool_id], rax
@@ -329,18 +398,9 @@ main:
     jmp .while
     .end_while:
 
-    ; munmap(shm_ptr, shm_size)
-    mov rax, SYSCALL_MUNMAP
-    mov rdi, qword [shm_ptr]
-    mov rsi, shm_size
-    syscall
-    call exit_on_error
-
-    ; close(shm_fd)
-    mov rax, SYSCALL_CLOSE
-    mov rdi, qword [shm_fd]
-    syscall
-    call exit_on_error
+    ; drop(shm)
+    mov rdi, shm
+    call Shm_drop
 
     ; close(fd)
     mov rax, SYSCALL_CLOSE
@@ -636,6 +696,66 @@ handle_wm_base_ping:
 ; #[systemv]
 ; fn handle_toplevel_configure((toplevel_id := rdi): u32)
 handle_toplevel_configure:
+    PUSH r12
+
+    ; let (shm_size := r12) = 4 * wire_message.width * wire_message.height
+    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width]
+    mov esi, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height]
+    mul rsi
+    lea r12, [4 * rax]
+
+    DEBUG_UINT qword [wl_shm_pool_id]
+
+    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width]
+    DEBUG_UINT rax
+
+    mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height]
+    DEBUG_UINT rax
+
+    DEBUG_UINT r12
+    DEBUG_NEWLINE
+
+    ; drop(shm)
+    mov rdi, shm
+    call Shm_drop
+
+    ; shm = Shm::new(shm_size)
+    mov rdi, shm
+    mov rsi, r12
+    call Shm_new
+
+    ; wire_send_buffer_destroy(wl_buffer_id)
+    mov rdi, qword [wl_buffer_id]
+    call wire_send_buffer_destroy
+
+    ; wire_send_shm_pool_destroy(wl_shm_pool_id)
+    mov rdi, qword [wl_shm_pool_id]
+    call wire_send_shm_pool_destroy
+
+    ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm.fd, shm_size)
+    mov rdi, qword [wl_shm_id]
+    mov rsi, qword [shm + Shm.fd]
+    mov rdx, r12
+    call wire_send_shm_create_pool
+    mov qword [wl_shm_pool_id], rax
+
+    ; wl_buffer_id = wire_send_shm_pool_create_buffer(
+    ;     wl_shm_pool_id,
+    ;     offset = 0,
+    ;     width = wire_message.width,
+    ;     height = wire_message.height,
+    ;     stride = .width * sizeof(u32),
+    ;     format = SHM_FORMAT_XRGB8888)
+    mov rdi, qword [wl_shm_pool_id]
+    xor rsi, rsi
+    mov edx, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width]
+    mov ecx, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height]
+    lea r8, [4 * rdx]
+    mov r9, SHM_FORMAT_XRGB8888
+    call wire_send_shm_pool_create_buffer
+    mov qword [wl_buffer_id], rax
+
+    POP r12
     ret
 
 ; #[systemv]

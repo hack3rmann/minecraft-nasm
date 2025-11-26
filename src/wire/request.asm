@@ -539,6 +539,19 @@ wire_send_shm_create_pool:
     ret
 
 ; #[systemv]
+; fn wire_send_shm_pool_destroy((shm_pool_id := rdi): u32)
+wire_send_shm_pool_destroy:
+    ; wire_begin_request(shm_pool_id, wire_request.shm_pool_destroy_opcode)
+    ; mov rdi, rdi
+    mov rsi, wire_request.shm_pool_destroy_opcode
+    call wire_begin_request
+
+    ; wire_end_request()
+    call wire_end_request
+
+    ret
+
+; #[systemv]
 ; fn wire_send_shm_pool_create_buffer(
 ;     (shm_pool_id := rdi): u32,
 ;     (offset := rsi): u32,
