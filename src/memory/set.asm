@@ -8,10 +8,10 @@ set:
     ; let (value := al) = value as u8
     mov rax, rsi
 
-    ; while (count as isize) >= 0 {
+    ; while count != 0 {
     .while:
-    cmp rdx, 0
-    jl .end_while
+    test rdx, rdx
+    jz .end_while
 
         ; *ptr = value
         mov byte [rdi], al
