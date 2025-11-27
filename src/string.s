@@ -4,10 +4,11 @@
 extern cstr_match_length, cstr_len, print_cstr
 
 struc String
-    .len    resq 1
-    .ptr    resq 1
-    .cap    resq 1
-    .sizeof equ $-.len
+    .len      resq 1
+    .ptr      resq 1
+    .cap      resq 1
+    .sizeof   equ $-.len
+    .alignof  equ 8
 endstruc
 
 extern String_new, String_drop, String_push_ascii, String_push_str, String_with_capacity, \
@@ -17,9 +18,10 @@ extern String_new, String_drop, String_push_ascii, String_push_str, String_with_
 extern parse_raw_string, parse_arg_escape, parse_arg_string, parse_arg_type
 
 struc Str
-    .len    resq 1
-    .ptr    resq 1
-    .sizeof equ $-.len
+    .len      resq 1
+    .ptr      resq 1
+    .sizeof   equ $-.len
+    .alignof  equ 8
 endstruc
 
 extern Str_eq

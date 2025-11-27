@@ -29,8 +29,6 @@ section .data
     ; static is_window_open: bool
     is_window_open        dq 1
 
-    iteration             dq 0
-
     window_width          dq initial_window_width
     window_height         dq initial_window_height
 
@@ -39,6 +37,7 @@ section .bss
     display_fd            resq 1
 
     ; static socket_path: String
+    align String.alignof
     socket_path           resb String.sizeof
 
     addr:
@@ -554,9 +553,6 @@ handle_toplevel_configure:
     mov r9, SHM_FORMAT_XRGB8888
     call wire_send_shm_pool_create_buffer
     mov qword [wl_buffer_id], rax
-
-    ; iteration = 0
-    mov qword [iteration], 0
 
     .exit:
     POP r12
