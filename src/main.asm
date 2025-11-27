@@ -21,29 +21,34 @@ section .rodata
     xdg_wm_base_str.ptr   db "xdg_wm_base"
     xdg_wm_base_str.len   equ $-xdg_wm_base_str.ptr
 
-    window_width          equ 640
-    window_height         equ 480
-    shm_size              equ 4 * window_width * window_height
+    initial_window_width  equ 640
+    initial_window_height equ 480
+    initial_shm_size      equ 4 * initial_window_width * initial_window_height
 
 section .data
     ; static is_window_open: bool
-    is_window_open dq 1
+    is_window_open        dq 1
+
+    iteration             dq 0
+
+    window_width          dq initial_window_width
+    window_height         dq initial_window_height
 
 section .bss
     ; static display_fd: usize
-    display_fd resq 1
+    display_fd            resq 1
 
     ; static socket_path: String
-    socket_path resb String.sizeof
+    socket_path           resb String.sizeof
 
     addr:
-        .sun_family resw 1
-        .sun_path   resb 254
-    addr_max_len    equ $-addr
+        .sun_family       resw 1
+        .sun_path         resb 254
+    addr_max_len          equ $-addr
 
     ; static shm: Shm
     align Shm.alignof
-    shm resb Shm.sizeof
+    shm                   resb Shm.sizeof
 
 section .text
 
@@ -91,9 +96,9 @@ main:
     syscall
     call exit_on_error
 
-    ; shm = Shm::new(shm_size)
+    ; shm = Shm::new(initial_shm_size)
     mov rdi, shm
-    mov rsi, shm_size
+    mov rsi, initial_shm_size
     call Shm_new
 
     ; wire_set_dispatcher(
@@ -204,10 +209,10 @@ main:
     mov rdx, minecraft_str.ptr
     call wire_send_xdg_toplevel_set_app_id
 
-    ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm.fd, shm_size)
+    ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm.fd, initial_shm_size)
     mov rdi, qword [wl_shm_id]
     mov rsi, qword [shm + Shm.fd]
-    mov rdx, shm_size
+    mov rdx, initial_shm_size
     call wire_send_shm_create_pool
     mov qword [wl_shm_pool_id], rax
 
@@ -232,6 +237,35 @@ main:
     cmp byte [is_window_open], 0
     je .end_while
 
+        ; for i in 0..256 {
+        xor rcx, rcx
+        .for:
+        cmp rcx, 256
+        jae .end_for
+
+            ; if 4 * iteration < shm.size {
+            mov rax, qword [iteration]
+            shl rax, 2
+            cmp rax, qword [shm + Shm.size]
+            jae .end_if_iteration
+
+                ; *shm.ptr.cast::<u32>().add(iteration) = iteration as u32
+                mov rax, qword [shm + Shm.ptr]
+                mov rdi, qword [iteration]
+                lea rax, [rax + 4 * rdi]
+                mov dword [rax], RGB(0xFF, 0, 0)
+
+                ; iteration += 1
+                inc qword [iteration]
+
+            ; }
+            .end_if_iteration:
+
+        ; }
+        inc rcx
+        jmp .for
+        .end_for:
+
         ; wire_send_surface_attach(wl_surface_id, wl_buffer_id, 0, 0)
         mov rdi, qword [wl_surface_id]
         mov rsi, qword [wl_buffer_id]
@@ -239,12 +273,12 @@ main:
         xor rcx, rcx
         call wire_send_surface_attach
     
-        ; wire_send_surface_damage(wl_surface_id, 0, 0, u32::MAX, u32::MAX)
+        ; wire_send_surface_damage(wl_surface_id, 0, 0, window_width, window_height)
         mov rdi, qword [wl_surface_id]
         xor rsi, rsi
         xor rdx, rdx
-        mov rcx, 0xFFFFFFFF
-        mov r8, 0xFFFFFFFF
+        mov rcx, qword [window_width]
+        mov r8, qword [window_height]
         call wire_send_surface_damage
 
         ; wire_send_surface_commit(wl_surface_id)
@@ -470,9 +504,15 @@ handle_toplevel_configure:
     cmp dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height], 0
     je .exit
 
-    ; let (shm_size := r12) = sizeof(u32) * width * height
+    ; (window_width := rax) = wire_message.width
     mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width]
+    mov qword [window_width], rax
+
+    ; (window_height := rsi) = wire_message.height
     mov esi, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height]
+    mov qword [window_height], rsi
+
+    ; let (shm_size := r12) = sizeof(u32) * window_width * window_height
     mul rsi
     lea r12, [4 * rax]
 
@@ -519,6 +559,9 @@ handle_toplevel_configure:
     mov r9, SHM_FORMAT_XRGB8888
     call wire_send_shm_pool_create_buffer
     mov qword [wl_buffer_id], rax
+
+    ; iteration = 0
+    mov qword [iteration], 0
 
     .exit:
     POP r12

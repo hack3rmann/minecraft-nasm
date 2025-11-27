@@ -68,11 +68,12 @@ Shm_new:
     syscall
     call exit_on_error
 
-    ; set($ret->ptr, 0xFF, shm_size)
+    ; set32($ret->ptr, SHM_COLOR, shm_size / sizeof(u32))
     mov rdi, qword [r12 + Shm.ptr]
-    mov rsi, 0xFF
+    mov rsi, SHM_COLOR
     mov rdx, r13
-    call set
+    shr rdx, 2
+    call set32
     
     ; $ret->size = shm_size
     mov qword [r12 + Shm.size], r13
