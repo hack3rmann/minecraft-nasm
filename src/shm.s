@@ -2,7 +2,7 @@
 %define _SHM_INC
 
 %define RGB(r, g, b) ((b) | ((g) << 8) | ((r) << 16))
-%define SHM_COLOR RGB(0x01, 0x97, 0xF6)
+%define SHM_COLOR RGB(0xF, 0xF, 0xF)
 
 struc Shm
     .fd                     resq 1

@@ -61,6 +61,65 @@ main:
     ; wire_init()
     call wire_init
 
+    ; wayland_init()
+    call wayland_init
+
+    ; while is_window_open {
+    .while:
+    cmp byte [is_window_open], 0
+    je .end_while
+
+        ; update_surface()
+        call update_surface
+
+        ; wire_display_roundtrip(display_fd)
+        mov rdi, qword [display_fd]
+        call wire_display_roundtrip
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ; wayland_deinit()
+    call wayland_deinit
+
+    ; wire_deinit()
+    call wire_deinit
+
+    ; deinit_format()
+    call deinit_format
+
+    ; return EXIT_SUCCESS
+    xor rax, rax
+    ret
+
+; #[systemv]
+; fn update_surface()
+update_surface:
+    ; wire_send_surface_attach(wl_surface_id, wl_buffer_id, 0, 0)
+    mov rdi, qword [wl_surface_id]
+    mov rsi, qword [wl_buffer_id]
+    xor rdx, rdx
+    xor rcx, rcx
+    call wire_send_surface_attach
+
+    ; wire_send_surface_damage(wl_surface_id, 0, 0, window_width, window_height)
+    mov rdi, qword [wl_surface_id]
+    xor rsi, rsi
+    xor rdx, rdx
+    mov rcx, qword [window_width]
+    mov r8, qword [window_height]
+    call wire_send_surface_damage
+
+    ; wire_send_surface_commit(wl_surface_id)
+    mov rdi, qword [wl_surface_id]
+    call wire_send_surface_commit
+
+    ret
+
+; #[systemv]
+; fn wayland_init()
+wayland_init:
     ; socket_path = get_wayland_socket_path()
     mov rdi, socket_path
     call get_wayland_socket_path
@@ -232,67 +291,11 @@ main:
     call wire_send_shm_pool_create_buffer
     mov qword [wl_buffer_id], rax
 
-    ; while is_window_open {
-    .while:
-    cmp byte [is_window_open], 0
-    je .end_while
+    ret
 
-        ; for i in 0..256 {
-        xor rcx, rcx
-        .for:
-        cmp rcx, 256
-        jae .end_for
-
-            ; if 4 * iteration < shm.size {
-            mov rax, qword [iteration]
-            shl rax, 2
-            cmp rax, qword [shm + Shm.size]
-            jae .end_if_iteration
-
-                ; *shm.ptr.cast::<u32>().add(iteration) = iteration as u32
-                mov rax, qword [shm + Shm.ptr]
-                mov rdi, qword [iteration]
-                lea rax, [rax + 4 * rdi]
-                mov dword [rax], RGB(0xFF, 0, 0)
-
-                ; iteration += 1
-                inc qword [iteration]
-
-            ; }
-            .end_if_iteration:
-
-        ; }
-        inc rcx
-        jmp .for
-        .end_for:
-
-        ; wire_send_surface_attach(wl_surface_id, wl_buffer_id, 0, 0)
-        mov rdi, qword [wl_surface_id]
-        mov rsi, qword [wl_buffer_id]
-        xor rdx, rdx
-        xor rcx, rcx
-        call wire_send_surface_attach
-    
-        ; wire_send_surface_damage(wl_surface_id, 0, 0, window_width, window_height)
-        mov rdi, qword [wl_surface_id]
-        xor rsi, rsi
-        xor rdx, rdx
-        mov rcx, qword [window_width]
-        mov r8, qword [window_height]
-        call wire_send_surface_damage
-
-        ; wire_send_surface_commit(wl_surface_id)
-        mov rdi, qword [wl_surface_id]
-        call wire_send_surface_commit
-
-        ; wire_display_roundtrip(display_fd)
-        mov rdi, qword [display_fd]
-        call wire_display_roundtrip
-
-    ; }
-    jmp .while
-    .end_while:
-
+; #[systemv]
+; fn wayland_deinit()
+wayland_deinit:
     ; drop(shm)
     mov rdi, shm
     call Shm_drop
@@ -307,14 +310,6 @@ main:
     mov rdi, socket_path
     call String_drop
 
-    ; wire_deinit()
-    call wire_deinit
-
-    ; deinit_format()
-    call deinit_format
-
-    ; return EXIT_SUCCESS
-    xor rax, rax
     ret
 
 ; #[systemv]
