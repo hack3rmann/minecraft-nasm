@@ -1,6 +1,21 @@
 %ifndef _MEMORY_INC
 %define _MEMORY_INC
 
+%define XMM_ALIGN 16
+%define YMM_ALIGN 32
+
+%define U8_MAX  0xFF
+%define U16_MAX 0xFFFF
+%define U32_MAX 0xFFFFFFFF
+%define U64_MAX 0xFFFFFFFFFFFFFFFF
+
+%define U48F16(x, y) (((x) << 16) | ((y) & U16_MAX))
+%define U24F8(x, y) (((x) << 8) | ((y) & U8_MAX))
+
+%define ALIGNED(n_bytes) (n_bytes + (8 - (n_bytes % 8)) % 8)
+
+%define PAIR32(x, y) (((x) << 32) | (y))
+
 MMAP_PAGE_SIZE  equ 4096
 
 PROT_NONE       equ 0
@@ -26,10 +41,6 @@ MAP_FILE        equ 0x0000
 MAP_SHARED      equ 0x0001
 MAP_PRIVATE     equ 0x0002
 MAP_FIXED       equ 0x0010
-
-%define ALIGNED(n_bytes) (n_bytes + (8 - (n_bytes % 8)) % 8)
-
-%define PAIR32(x, y) (((x) << 32) | (y))
 
 extern alloc, dealloc, realloc, copy, set8, set32, set256
 

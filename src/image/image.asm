@@ -3,6 +3,11 @@
 %include "../memory.s"
 %include "../error.s"
 
+section .rodata
+    align XMM_ALIGN
+    u32x4_one     times 4 dd 1
+    u24f8x4_one   times 4 dd U24F8(1, 0)
+
 section .text
 
 ; #[systemv]
@@ -64,6 +69,7 @@ Image_slice:
     ja abort
 
     ; ($ret->width, $ret->height) = (width, height)
+    rol rcx, 32
     mov qword [r12 + ImageSlice.width], rcx
 
     ; ($ret->total_width, $ret->total_height) = (self.width, self.height)
@@ -122,6 +128,63 @@ Image_fill_rect:
     add rsp, .stack_size
 
     POP rbp, r13, r12
+    ret
+
+; #[systemv]
+; fn Image::fill_triangle(
+;     &mut self := rdi,
+;     (color := esi): Color,
+;     (a := xmm0): u24f8x4,
+;     (b := xmm1): u24f8x4,
+;     (c := xmm2): u24f8x4,
+; )
+Image_fill_triangle:
+    ; a.y = self.height as u24f8 - a.y - 1
+    vpbroadcastd xmm5, dword [rdi + Image.height]
+    pslld xmm5, 8
+    psubd xmm5, xmm0
+    psubd xmm5, [u24f8x4_one]
+    vpblendd xmm0, xmm0, xmm5, 0b0010
+
+    ; b.y = self.height as u24f8 - b.y - 1
+    vpbroadcastd xmm5, dword [rdi + Image.height]
+    pslld xmm5, 8
+    psubd xmm5, xmm1
+    psubd xmm5, [u24f8x4_one]
+    vpblendd xmm1, xmm1, xmm5, 0b0010
+
+    ; c.y = self.height as u24f8 - c.y - 1
+    vpbroadcastd xmm5, dword [rdi + Image.height]
+    pslld xmm5, 8
+    psubd xmm5, xmm2
+    psubd xmm5, [u24f8x4_one]
+    vpblendd xmm2, xmm2, xmm5, 0b0010
+
+    ; let (min := xmm3) = min(a, b, c) as u32x4
+    vpminud xmm3, xmm0, xmm1
+    pminud xmm3, xmm2
+    psrld xmm3, 8
+
+    ; let (max := xmm4) = max(a, b, c) as u32x4
+    vpmaxud xmm4, xmm0, xmm1
+    pmaxud xmm4, xmm2
+    psrld xmm4, 8
+
+    ; let ((x, y) := rdx) = (min.x, min.y)
+    pextrq rdx, xmm3, 0
+    rol rdx, 32
+
+    ; let (size := xmm4) = max - min + u32x4::ONE
+    paddd xmm4, [u32x4_one]
+    psubd xmm4, xmm3
+
+    ; let ((width, height) := rcx) = (size.x, size.y)
+    pextrq rcx, xmm4, 0
+    rol rcx, 32
+
+    ; self.fill_rect(color, (x, y), (width, height))
+    call Image_fill_rect
+
     ret
 
 ; #[systemv]

@@ -28,6 +28,11 @@ section .rodata
     initial_window_height equ 480
     initial_shm_size      equ 4 * initial_window_width * initial_window_height
 
+    align XMM_ALIGN
+    a dd U24F8(100, 0), U24F8(100, 0), 0, 0
+    b dd U24F8(300, 0), U24F8(100, 0), 0, 0
+    c dd U24F8(200, 0), U24F8(200, 0), 0, 0
+
 section .data
     ; static is_window_open: bool
     is_window_open        dq 1
@@ -80,12 +85,20 @@ main:
         mov esi, CLEAR_COLOR
         call Image_fill
 
-        ; screen_image.fill_rect(RGB(..), (100, 100), (100, 300))
+        ; screen_image.fill_rect(RGB(..), (100, 379), (100, 100))
         mov rdi, screen_image
         mov esi, RGB(0, 0xFF, 0xFF)
-        mov rdx, PAIR32(100, 100)
-        mov rcx, PAIR32(100, 300)
+        mov rdx, PAIR32(100, 379)
+        mov rcx, PAIR32(201, 101)
         call Image_fill_rect
+
+        ; screen_image.fill_triangle(RGB(..), a, b, c)
+        mov rdi, screen_image
+        mov esi, RGB(0xFF, 0xFF, 0)
+        vmovaps xmm0, [a]
+        vmovaps xmm1, [b]
+        vmovaps xmm2, [c]
+        call Image_fill_triangle
 
         ; update_surface()
         call update_surface
