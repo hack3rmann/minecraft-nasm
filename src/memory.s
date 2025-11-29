@@ -31,6 +31,6 @@ MAP_FIXED       equ 0x0010
 
 %define PAIR32(x, y) (((x) << 32) | (y))
 
-extern alloc, dealloc, realloc, copy, set, set32
+extern alloc, dealloc, realloc, copy, set8, set32
 
 %endif ; !_MEMORY_INC

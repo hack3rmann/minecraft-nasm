@@ -250,11 +250,11 @@ wire_flush_fds:
     ; let (display_fd := r12) = display_fd
     mov r12, rdi
 
-    ; set(&msg, 0, sizeof(msg))
+    ; set8(&msg, 0, sizeof(msg))
     lea rdi, [rbp + .msg]
     xor rsi, rsi
     mov rdx, msghdr.sizeof
-    call set
+    call set8
 
     ; io.iov_base = &wire_message_buffer
     mov qword [rbp + .io + iovec.iov_base], wire_message_buffer

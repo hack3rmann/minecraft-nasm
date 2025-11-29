@@ -3,8 +3,8 @@
 section .text
 
 ; #[systemv]
-; fn set((ptr := rdi): *mut u8, (value := rsi): u8, (count := rdx): usize)
-set:
+; fn set8((ptr := rdi): *mut u8, (value := rsi): u8, (count := rdx): usize)
+set8:
     ; let (value := al) = value as u8
     mov rax, rsi
 
