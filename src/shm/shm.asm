@@ -68,12 +68,16 @@ Shm_new:
     syscall
     call exit_on_error
 
-    ; set32($ret->ptr, SHM_COLOR, shm_size / sizeof(u32))
+    ; assert $ret->ptr % sizeof(u256) == 0
+    test qword [r12 + Shm.ptr], 255
+    jnz abort
+
+    ; set256($ret->ptr, 0 := ymm0, shm_size / sizeof(u256))
     mov rdi, qword [r12 + Shm.ptr]
-    mov rsi, SHM_INITIAL_VALUE
+    vpxor ymm0, ymm0, ymm0
     mov rdx, r13
-    shr rdx, 2
-    call set32
+    shr rdx, 5
+    call set256
     
     ; $ret->size = shm_size
     mov qword [r12 + Shm.size], r13

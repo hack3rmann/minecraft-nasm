@@ -1,8 +1,6 @@
 %ifndef _SHM_INC
 %define _SHM_INC
 
-%define SHM_INITIAL_VALUE 0
-
 struc Shm
     .fd                     resq 1
     .size                   resq 1
