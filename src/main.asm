@@ -7,6 +7,9 @@
 %include "env.s"
 %include "wire.s"
 %include "shm.s"
+%include "image.s"
+
+%define CLEAR_COLOR RGB(0xF, 0xF, 0xF)
 
 section .rodata
     minecraft_str.ptr     db "Minecraft"
@@ -29,8 +32,12 @@ section .data
     ; static is_window_open: bool
     is_window_open        dq 1
 
-    window_width          dq initial_window_width
-    window_height         dq initial_window_height
+    screen_image:
+    istruc Image2d
+        at .data,         dq 0
+        at .width,        dd initial_window_width
+        at .height,       dd initial_window_height
+    iend
 
 section .bss
     ; static display_fd: usize
@@ -102,12 +109,12 @@ update_surface:
     xor rcx, rcx
     call wire_send_surface_attach
 
-    ; wire_send_surface_damage(wl_surface_id, 0, 0, window_width, window_height)
+    ; wire_send_surface_damage(wl_surface_id, 0, 0, screen_image.width, screen_image.height)
     mov rdi, qword [wl_surface_id]
     xor rsi, rsi
     xor rdx, rdx
-    mov rcx, qword [window_width]
-    mov r8, qword [window_height]
+    mov ecx, dword [screen_image + Image2d.width]
+    mov r8d, dword [screen_image + Image2d.height]
     call wire_send_surface_damage
 
     ; wire_send_surface_commit(wl_surface_id)
@@ -158,6 +165,17 @@ wayland_init:
     mov rdi, shm
     mov rsi, initial_shm_size
     call Shm_new
+
+    ; screen_image = Image2d { data: shm.ptr, width: initial_window_width, height: initial_window_height }
+    mov rax, qword [shm + Shm.ptr]
+    mov qword [screen_image + Image2d.data], rax
+    mov dword [screen_image + Image2d.width], initial_window_width
+    mov dword [screen_image + Image2d.height], initial_window_height
+
+    ; screen_image.fill(CLEAR_COLOR)
+    mov rdi, screen_image
+    mov esi, CLEAR_COLOR
+    call Image2d_fill
 
     ; wire_set_dispatcher(
     ;     WlObjectType::Registry,
@@ -277,14 +295,14 @@ wayland_init:
     ; wl_buffer_id = wire_send_shm_pool_create_buffer(
     ;     wl_shm_pool_id,
     ;     offset = 0,
-    ;     width = window_width,
-    ;     height = window_height,
+    ;     width = screen_image.width,
+    ;     height = screen_image.height,
     ;     stride = .width * sizeof(u32),
     ;     format = SHM_FORMAT_XRGB8888)
     mov rdi, qword [wl_shm_pool_id]
     xor rsi, rsi
-    mov rdx, window_width
-    mov rcx, window_height
+    mov edx, dword [screen_image + Image2d.width]
+    mov ecx, dword [screen_image + Image2d.height]
     lea r8, [4 * rdx]
     mov r9, SHM_FORMAT_XRGB8888
     call wire_send_shm_pool_create_buffer
@@ -498,15 +516,15 @@ handle_toplevel_configure:
     cmp dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height], 0
     je .exit
 
-    ; (window_width := rax) = wire_message.width
+    ; (screen_image.width := rax) = wire_message.width
     mov eax, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.width]
-    mov qword [window_width], rax
+    mov dword [screen_image + Image2d.width], eax
 
-    ; (window_height := rsi) = wire_message.height
+    ; (screen_image.height := rsi) = wire_message.height
     mov esi, dword [wire_message + WireMessageHeader.sizeof + XdgToplevelConfigureEvent.height]
-    mov qword [window_height], rsi
+    mov qword [screen_image + Image2d.height], rsi
 
-    ; let (shm_size := r12) = sizeof(u32) * window_width * window_height
+    ; let (shm_size := r12) = sizeof(u32) * screen_image.width * screen_image.height
     mul rsi
     lea r12, [4 * rax]
 
@@ -530,6 +548,15 @@ handle_toplevel_configure:
     mov rdi, shm
     mov rsi, r12
     call Shm_new
+
+    ; screen_image.data = shm.ptr
+    mov rax, qword [shm + Shm.ptr]
+    mov qword [screen_image + Image2d.data], rax
+
+    ; screen_image.fill(CLEAR_COLOR)
+    mov rdi, screen_image
+    mov esi, CLEAR_COLOR
+    call Image2d_fill
 
     ; wl_shm_pool_id = wire_send_shm_create_pool(wl_shm_id, shm.fd, shm_size)
     mov rdi, qword [wl_shm_id]

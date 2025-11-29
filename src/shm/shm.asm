@@ -70,7 +70,7 @@ Shm_new:
 
     ; set32($ret->ptr, SHM_COLOR, shm_size / sizeof(u32))
     mov rdi, qword [r12 + Shm.ptr]
-    mov rsi, SHM_COLOR
+    mov rsi, SHM_INITIAL_VALUE
     mov rdx, r13
     shr rdx, 2
     call set32
