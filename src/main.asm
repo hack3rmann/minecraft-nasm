@@ -10,6 +10,7 @@
 %include "image.s"
 
 %define CLEAR_COLOR RGB(0xF, 0xF, 0xF)
+; %define BENCHMARK
 
 section .rodata
     minecraft_str.ptr     db "Minecraft"
@@ -36,7 +37,7 @@ section .rodata
     line_to   dd U24F8(500, 127), U24F8(400, 200), 0, 0
 
 section .data
-    ; static is_window_open: bool
+    ; static is_window_open: bool = true
     is_window_open        dq 1
 
     screen_image:
@@ -45,6 +46,10 @@ section .data
         at .width,        dd initial_window_width
         at .height,       dd initial_window_height
     iend
+
+    ; static iteration: usize = 0
+    align 8
+    iteration dq 0
 
 section .bss
     ; static display_fd: usize
@@ -115,6 +120,15 @@ main:
         ; wire_display_roundtrip(display_fd)
         mov rdi, qword [display_fd]
         call wire_display_roundtrip
+
+        ; iteration += 1
+        inc qword [iteration]
+
+        %ifdef BENCHMARK
+            ; if iteration >= 1024 { break }
+            cmp qword [iteration], 1024
+            jae .end_while
+        %endif
 
     ; }
     jmp .while
