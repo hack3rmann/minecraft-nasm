@@ -15,7 +15,8 @@ struc Image
     .alignof              equ 8
 endstruc
 
-extern Image_fill, Image_slice, Image_fill_rect, Image_fill_triangle
+extern Image_fill, Image_slice, Image_fill_rect, Image_fill_triangle, \
+       Image_draw_line
 
 struc ImageSlice
     ; data: *mut u32

@@ -2,6 +2,7 @@
 %include "../debug.s"
 %include "../memory.s"
 %include "../error.s"
+%include "../vector.s"
 
 section .rodata
     align XMM_ALIGN
@@ -174,16 +175,36 @@ Image_fill_triangle:
     pextrq rdx, xmm3, 0
     rol rdx, 32
 
-    ; let (size := xmm4) = max - min + u32x4::ONE
-    paddd xmm4, [u32x4_one]
-    psubd xmm4, xmm3
+    ; let (size := xmm5) = max - min + u32x4::ONE
+    vpaddd xmm5, xmm4, [u32x4_one]
+    psubd xmm5, xmm3
 
     ; let ((width, height) := rcx) = (size.x, size.y)
-    pextrq rcx, xmm4, 0
+    pextrq rcx, xmm5, 0
     rol rcx, 32
 
     ; self.fill_rect(color, (x, y), (width, height))
     call Image_fill_rect
+
+    ret
+
+; #[systemv]
+; fn Image::draw_line(
+;     &mut self := rdi,
+;     (color := esi): Color,
+;     (from := xmm0): u24f8x4,
+;     (to := xmm1): u24f8x4,
+; )
+Image_draw_line:
+    ; let (dir := xmm2) = to - from
+    vpsubd xmm2, xmm1, xmm0
+
+    ; let (slope := eax) = dir.y / dir.x
+    pextrd r8d, xmm2, 0
+    pextrd eax, xmm2, 1
+    xor rdx, rdx
+    div r8
+    shl rax, 8
 
     ret
 

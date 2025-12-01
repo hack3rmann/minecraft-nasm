@@ -29,9 +29,11 @@ section .rodata
     initial_shm_size      equ 4 * initial_window_width * initial_window_height
 
     align XMM_ALIGN
-    a dd U24F8(100, 0), U24F8(100, 0), 0, 0
-    b dd U24F8(300, 0), U24F8(100, 0), 0, 0
-    c dd U24F8(200, 0), U24F8(200, 0), 0, 0
+    a         dd U24F8(100, 0),   U24F8(100, 0), 0, 0
+    b         dd U24F8(300, 0),   U24F8(100, 0), 0, 0
+    c         dd U24F8(200, 0),   U24F8(200, 0), 0, 0
+    line_from dd U24F8(100, 127), U24F8(100, 0), 0, 0
+    line_to   dd U24F8(500, 127), U24F8(400, 200), 0, 0
 
 section .data
     ; static is_window_open: bool
@@ -66,6 +68,18 @@ section .text
 ; #[systemv]
 ; fn main() -> i64
 main:
+;     mov rax, U24F8(100, 0)
+;     mov r8,  U24F8(200, 0)
+; 
+;     shl rax, 8
+;     xor rdx, rdx
+;     div r8
+; 
+;     DEBUG_UINT rax
+; 
+;     xor rax, rax
+;     ret
+; 
     ; init_format()
     call init_format
 
@@ -99,6 +113,13 @@ main:
         vmovaps xmm1, [b]
         vmovaps xmm2, [c]
         call Image_fill_triangle
+
+        ; screen_image.draw_line(RGB(..), line_from, line_to)
+        mov rdi, screen_image
+        mov esi, RGB(0xFF, 0, 0xFF)
+        vmovaps xmm0, [line_from]
+        vmovaps xmm1, [line_to]
+        call Image_draw_line
 
         ; update_surface()
         call update_surface
