@@ -4,8 +4,15 @@ EXEC_NAME = minecraft
 
 NASM = nasm
 NASM_FLAGS = --gprefix _ -f elf64
+NASM_FLAGS_DEBUG = -F dwarf -g
+NASM_FLAGS_RELEASE = -O3
 LD = ld
 LD_FLAGS =
+LD_FLAGS_DEBUG =
+LD_FLAGS_RELEASE = -s
+
+NASM_FLAGS += $(NASM_FLAGS_DEBUG)
+LD_FLAGS += $(LD_FLAGS_DEBUG)
 
 GREEN = \033[0;32m
 NC = \033[0m

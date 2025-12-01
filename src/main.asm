@@ -68,18 +68,6 @@ section .text
 ; #[systemv]
 ; fn main() -> i64
 main:
-;     mov rax, U24F8(100, 0)
-;     mov r8,  U24F8(200, 0)
-; 
-;     shl rax, 8
-;     xor rdx, rdx
-;     div r8
-; 
-;     DEBUG_UINT rax
-; 
-;     xor rax, rax
-;     ret
-; 
     ; init_format()
     call init_format
 
