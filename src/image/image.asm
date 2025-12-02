@@ -188,6 +188,31 @@ Image_fill_triangle:
 
     ret
 
+; #[fastcall(rax, rdx, r8)]
+; fn Image::set_pixel(
+;     &mut self := rdi,
+;     (color := esi): Color,
+;     ((x, y) := rdx): (u32, u32),
+; )
+Image_set_pixel:
+    ; let ((x, y) := r8) = (x, y)
+    mov r8, rdx
+
+    ; let (index := rax) = x + self.width * y
+    mov eax, dword [rdi + Image.width]
+    mov edx, r8d
+    mul rdx
+    mov rdx, r8
+    shr rdx, 32
+    add rax, rdx
+
+    ; self.data[index] = color
+    shl rax, 2
+    add rax, qword [rdi + Image.data]
+    mov dword [rax], esi
+
+    ret
+
 ; #[systemv]
 ; fn Image::draw_line(
 ;     &mut self := rdi,
@@ -203,8 +228,43 @@ Image_draw_line:
     pextrd r8d, xmm2, 0
     pextrd eax, xmm2, 1
     xor rdx, rdx
-    div r8
     shl rax, 8
+    div r8
+
+    ; let (step := xmm2) = u24f8x4::new(1, slope, 0, 0)
+    mov r8d, U24F8(1, 0)
+    pinsrd xmm2, r8d, 0
+    pinsrd xmm2, eax, 1
+
+    ; while from.x <= to.x && from.y <= to.y {
+    .while:
+    pextrd eax, xmm0, 0
+    pextrd r8d, xmm1, 0
+    cmp eax, r8d
+    ja .end_while
+    pextrd eax, xmm0, 1
+    pextrd r8d, xmm1, 1
+    cmp eax, r8d
+    ja .end_while
+
+        ; let ((x, y) := r8) = (from.x as u32, from.y as u32)
+        pextrd eax, xmm0, 0
+        shr rax, 8
+        pextrd r8d, xmm0, 1
+        shr r8, 8
+        shl rax, 32
+        or r8, rax
+
+        ; self.set_pixel(color, (x, y))
+        mov rdx, r8
+        call Image_set_pixel
+    
+        ; from += step
+        paddd xmm0, xmm2
+
+    ; }
+    jmp .while
+    .end_while:
 
     ret
 
