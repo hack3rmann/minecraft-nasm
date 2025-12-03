@@ -198,6 +198,16 @@ Image_set_pixel:
     ; let ((x, y) := r8) = (x, y)
     mov r8, rdx
 
+    ; assert x < self.width
+    mov rax, r8
+    shr rax, 32
+    cmp eax, dword [rdi + Image.width]
+    jae abort
+
+    ; assert y < self.height
+    cmp r8d, dword [rdi + Image.height]
+    jae abort
+
     ; let (index := rax) = x + self.width * y
     mov eax, dword [rdi + Image.width]
     mov edx, r8d
@@ -221,55 +231,133 @@ Image_set_pixel:
 ;     (to := xmm1): i24f8x4,
 ; )
 Image_draw_line:
-    ; let (dir := xmm2) = to - from
-    vpsubd xmm2, xmm1, xmm0
+    ; let (dir := xmm3) = to - from
+    vpsubd xmm3, xmm1, xmm0
 
-    ; let (step := xmm2) = if (dir.y := eax) < (dir.x := r8d) {
-    pextrd eax, xmm2, 1
+    ; dir.x := r8d
+    pextrd r8d, xmm3, 0
+
+    ; dir.y := eax
+    pextrd eax, xmm3, 1
+
+    ; let (sign := r9d) = i32::sign(dir.y * dir.x)
+    mov r9d, eax
+    xor r9d, r8d
+    sar r9d, 31
+
+    ; let (signed_half := r10d) = if sign == 0 {
+    ;     i24f8::new(0, 128)
+    ; } else { -i24f8::new(0, 128) }
+    mov r10d, U24F8(0, 128)
+    mov r11d, -U24F8(0, 128)
+    test r9d, r9d
+    cmovnz r10d, r11d
+
+    ; let (abs_dir := xmm2) = dir.abs()
+    pabsd xmm2, xmm3
+
+    ; let (step := xmm2, n_steps := r9d) = if abs_dir.y < abs_dir.x {
     pextrd r8d, xmm2, 0
+    pextrd eax, xmm2, 1
     cmp eax, r8d
     jge .else_if_step
 
-        ; let (slope := eax) = dir.y / dir.x
-        xor rdx, rdx
-        add rax, U24F8(0, 128)
-        sal rax, 8
-        idiv r8
+        ; dir.x := r8d
+        pextrd r8d, xmm3, 0
 
-        ; let (step := xmm2) = u24f8x4::new(1, slope, 0, 0)
-        mov r8d, U24F8(1, 0)
-        pinsrd xmm2, r8d, 0
-        pinsrd xmm2, eax, 1
+        ; dir.y := eax
+        pextrd eax, xmm3, 1
+
+        ; if dir.x != 0 {
+        test r8d, r8d
+        jz .else_if_dirx
+
+            ; let (slope := eax) = dir.y / dir.x
+            movsx r8, r8d
+            add eax, r10d
+            movsx rax, eax
+            sal rax, 8
+            mov rdx, rax
+            sar rdx, 63
+            idiv r8
+
+            ; let (step := xmm2) = u24f8x4::new(1, slope, 0, 0)
+            mov r8d, U24F8(1, 0)
+            pxor xmm2, xmm2
+            pinsrd xmm2, r8d, 0
+            pinsrd xmm2, eax, 1
+
+        ; } else {
+        jmp .endif_if_dirx
+        .else_if_dirx:
+
+            ; let (step := xmm2) = u24f8x4::new(0, dir.y, 0, 0)
+            pxor xmm2, xmm2
+            pinsrd xmm2, eax, 1
+
+        ; }
+        .endif_if_dirx:
+
+        ; let (n_steps := r9d) = (to - from).abs().x as u32
+        vpsubd xmm4, xmm1, xmm0
+        pabsd xmm4, xmm4
+        pextrd r9d, xmm4, 0
+        shr r9d, 8
 
     ; } else {
     jmp .end_if_step
     .else_if_step:
 
-        ; let (slope := eax) = dir.x / dir.y
-        xchg r8d, eax
-        xor rdx, rdx
-        add rax, U24F8(0, 128)
-        sal rax, 8
-        idiv r8
+        ; dir.x := r8d
+        pextrd r8d, xmm3, 0
 
-        ; let (step := xmm2) = u24f8x4::new(slope, 1, 0, 0)
-        mov r8d, U24F8(1, 0)
-        pinsrd xmm2, eax, 0
-        pinsrd xmm2, r8d, 1
+        ; dir.y := eax
+        pextrd eax, xmm3, 1
+
+        ; if dir.y != 0 {
+        test eax, eax
+        jz .else_if_diry
+
+            ; let (slope := eax) = dir.x / dir.y
+            xchg r8d, eax
+            movsx r8, r8d
+            add eax, r10d
+            movsx rax, eax
+            sal rax, 8
+            mov rdx, rax
+            sar rdx, 63
+            idiv r8
+
+            ; let (step := xmm2) = u24f8x4::new(slope, 1, 0, 0)
+            mov r8d, U24F8(1, 0)
+            pxor xmm2, xmm2
+            pinsrd xmm2, eax, 0
+            pinsrd xmm2, r8d, 1
+
+        ; } else {
+        jmp .endif_if_diry
+        .else_if_diry:
+
+            ; let (step := xmm2) = u24f8x4::new(dir.x, 0, 0, 0)
+            pxor xmm2, xmm2
+            pinsrd xmm2, r8d, 0
+
+        ; }
+        .endif_if_diry:
+
+        ; let (n_steps := r9d) = (to - from).abs().y as u32
+        vpsubd xmm4, xmm1, xmm0
+        pabsd xmm4, xmm4
+        pextrd r9d, xmm4, 1
+        shr r9d, 8
 
     ; }
     .end_if_step:
 
-    ; while from.x <= to.x && from.y <= to.y {
+    ; while n_steps != 0 {
     .while:
-    pextrd eax, xmm0, 0
-    pextrd r8d, xmm1, 0
-    cmp eax, r8d
-    jg .end_while
-    pextrd eax, xmm0, 1
-    pextrd r8d, xmm1, 1
-    cmp eax, r8d
-    jg .end_while
+    test r9d, r9d
+    jz .end_while
 
         ; let ((x, y) := r8) = (from.x as u32, from.y as u32)
         pextrd eax, xmm0, 0
@@ -282,9 +370,12 @@ Image_draw_line:
         ; self.set_pixel(color, (x, y))
         mov rdx, r8
         call Image_set_pixel
-    
+
         ; from += step
         paddd xmm0, xmm2
+
+        ; n_steps -= 1
+        dec r9d
 
     ; }
     jmp .while

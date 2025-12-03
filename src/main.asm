@@ -50,7 +50,7 @@ section .data
     iteration dq 0
 
     align XMM_ALIGN
-    line_from dd U24F8(100, 127), U24F8(100, 0), 0, 0
+    line_from dd U24F8(100, 0), U24F8(200, 0), 0, 0
     line_to   dd U24F8(500, 127), U24F8(400, 200), 0, 0
 
 section .bss
@@ -124,8 +124,10 @@ main:
         call wire_display_roundtrip
 
         ; line_from += 16 * u24f8::ONE
-        add dword [line_from], 16
-        add dword [line_from + 4], 4
+        add dword [line_from], U24F8(0, 64)
+        add dword [line_from + 4], U24F8(0, 4)
+
+        ; sub dword [line_to + 4], U24F8(0, 64)
 
         ; iteration += 1
         inc qword [iteration]
