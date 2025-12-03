@@ -217,35 +217,59 @@ Image_set_pixel:
 ; fn Image::draw_line(
 ;     &mut self := rdi,
 ;     (color := esi): Color,
-;     (from := xmm0): u24f8x4,
-;     (to := xmm1): u24f8x4,
+;     (from := xmm0): i24f8x4,
+;     (to := xmm1): i24f8x4,
 ; )
 Image_draw_line:
     ; let (dir := xmm2) = to - from
     vpsubd xmm2, xmm1, xmm0
 
-    ; let (slope := eax) = dir.y / dir.x
-    pextrd r8d, xmm2, 0
+    ; let (step := xmm2) = if (dir.y := eax) < (dir.x := r8d) {
     pextrd eax, xmm2, 1
-    xor rdx, rdx
-    shl rax, 8
-    div r8
+    pextrd r8d, xmm2, 0
+    cmp eax, r8d
+    jge .else_if_step
 
-    ; let (step := xmm2) = u24f8x4::new(1, slope, 0, 0)
-    mov r8d, U24F8(1, 0)
-    pinsrd xmm2, r8d, 0
-    pinsrd xmm2, eax, 1
+        ; let (slope := eax) = dir.y / dir.x
+        xor rdx, rdx
+        add rax, U24F8(0, 128)
+        sal rax, 8
+        idiv r8
+
+        ; let (step := xmm2) = u24f8x4::new(1, slope, 0, 0)
+        mov r8d, U24F8(1, 0)
+        pinsrd xmm2, r8d, 0
+        pinsrd xmm2, eax, 1
+
+    ; } else {
+    jmp .end_if_step
+    .else_if_step:
+
+        ; let (slope := eax) = dir.x / dir.y
+        xchg r8d, eax
+        xor rdx, rdx
+        add rax, U24F8(0, 128)
+        sal rax, 8
+        idiv r8
+
+        ; let (step := xmm2) = u24f8x4::new(slope, 1, 0, 0)
+        mov r8d, U24F8(1, 0)
+        pinsrd xmm2, eax, 0
+        pinsrd xmm2, r8d, 1
+
+    ; }
+    .end_if_step:
 
     ; while from.x <= to.x && from.y <= to.y {
     .while:
     pextrd eax, xmm0, 0
     pextrd r8d, xmm1, 0
     cmp eax, r8d
-    ja .end_while
+    jg .end_while
     pextrd eax, xmm0, 1
     pextrd r8d, xmm1, 1
     cmp eax, r8d
-    ja .end_while
+    jg .end_while
 
         ; let ((x, y) := r8) = (from.x as u32, from.y as u32)
         pextrd eax, xmm0, 0
@@ -265,6 +289,18 @@ Image_draw_line:
     ; }
     jmp .while
     .end_while:
+
+    ; let ((x, y) := r8) = (to.x as u32, to.y as u32)
+    pextrd eax, xmm1, 0
+    shr rax, 8
+    pextrd r8d, xmm1, 1
+    shr r8, 8
+    shl rax, 32
+    or r8, rax
+
+    ; self.set_pixel(color, (x, y))
+    mov rdx, r8
+    call Image_set_pixel
 
     ret
 

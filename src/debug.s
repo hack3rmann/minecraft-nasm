@@ -109,8 +109,7 @@ STDOUT                       equ 1
 STDERR                       equ 2
 LF                           equ 10
 
-section .rodata
-    newline db LF
+extern newline
 
 extern format_buffer
 

@@ -3,6 +3,9 @@
 %include "../syscall.s"
 %include "../error.s"
 
+section .rodata
+    newline db LF
+
 section .text
 
 ; #[systemv]

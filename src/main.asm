@@ -33,8 +33,6 @@ section .rodata
     a         dd U24F8(100, 0),   U24F8(100, 0), 0, 0
     b         dd U24F8(300, 0),   U24F8(100, 0), 0, 0
     c         dd U24F8(200, 0),   U24F8(200, 0), 0, 0
-    line_from dd U24F8(100, 127), U24F8(100, 0), 0, 0
-    line_to   dd U24F8(500, 127), U24F8(400, 200), 0, 0
 
 section .data
     ; static is_window_open: bool = true
@@ -50,6 +48,10 @@ section .data
     ; static iteration: usize = 0
     align 8
     iteration dq 0
+
+    align XMM_ALIGN
+    line_from dd U24F8(100, 127), U24F8(100, 0), 0, 0
+    line_to   dd U24F8(500, 127), U24F8(400, 200), 0, 0
 
 section .bss
     ; static display_fd: usize
@@ -120,6 +122,10 @@ main:
         ; wire_display_roundtrip(display_fd)
         mov rdi, qword [display_fd]
         call wire_display_roundtrip
+
+        ; line_from += 16 * u24f8::ONE
+        add dword [line_from], 16
+        add dword [line_from + 4], 4
 
         ; iteration += 1
         inc qword [iteration]
