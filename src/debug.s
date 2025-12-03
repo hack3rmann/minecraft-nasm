@@ -56,6 +56,20 @@
     POPA
 %endmacro
 
+%macro DEBUG_INT 1
+    PUSHA
+
+    ; in case we care about `rsp`
+    add rsp, 8 * N_PUSHAS
+    mov rdi, %1
+    sub rsp, 8 * N_PUSHAS
+
+    call print_int
+    call print_newline
+
+    POPA
+%endmacro
+
 %macro DEBUG_STR 2
     PUSHA
     
@@ -102,6 +116,6 @@ extern format_buffer
 
 extern init_format, deinit_format
 
-extern print_uint_hex, print_uint, print_newline
+extern print_uint_hex, print_uint, print_int, print_newline
 
 %endif ; !_DEBUG_INC
