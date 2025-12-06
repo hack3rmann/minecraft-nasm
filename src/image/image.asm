@@ -265,6 +265,9 @@ Image_draw_line:
         ; dir.x := r8d
         pextrd r8d, xmm3, 0
 
+        ; abs_dir.x := ecx
+        pextrd ecx, xmm2, 0
+
         ; dir.y := eax
         pextrd eax, xmm3, 1
 
@@ -272,19 +275,24 @@ Image_draw_line:
         test r8d, r8d
         jz .else_if_dirx
 
-            ; let (slope := eax) = dir.y / dir.x
-            movsx r8, r8d
+            ; let (slope := eax) = dir.y / abs_dir.x
+            movsx rcx, ecx
             add eax, r10d
             movsx rax, eax
             sal rax, 8
             mov rdx, rax
             sar rdx, 63
-            idiv r8
+            idiv rcx
 
-            ; let (step := xmm2) = u24f8x4::new(1, slope, 0, 0)
-            mov r8d, U24F8(1, 0)
+            ; let (sign_x := r9d) = dir.x.sign() as u24f8
+            mov r9d, r8d
+            sar r9d, 31
+            sal r9d, 9
+            add r9d, U24F8(1, 0)
+
+            ; let (step := xmm2) = u24f8x4::new(sign_x, slope, 0, 0)
             pxor xmm2, xmm2
-            pinsrd xmm2, r8d, 0
+            pinsrd xmm2, r9d, 0
             pinsrd xmm2, eax, 1
 
         ; } else {
@@ -298,10 +306,11 @@ Image_draw_line:
         ; }
         .endif_if_dirx:
 
-        ; let (n_steps := r9d) = (to - from).abs().x as u32
+        ; let (n_steps := r9d) = (to - from).abs().x.round_up() as u32
         vpsubd xmm4, xmm1, xmm0
         pabsd xmm4, xmm4
         pextrd r9d, xmm4, 0
+        add r9d, U24F8(0, 255)
         shr r9d, 8
 
     ; } else {
@@ -314,25 +323,33 @@ Image_draw_line:
         ; dir.y := eax
         pextrd eax, xmm3, 1
 
+        ; abs_dir.y := ecx
+        pextrd ecx, xmm2, 1
+
         ; if dir.y != 0 {
         test eax, eax
         jz .else_if_diry
 
-            ; let (slope := eax) = dir.x / dir.y
-            xchg r8d, eax
-            movsx r8, r8d
+            ; let (slope := eax) = dir.x / abs_dir.y
+            mov eax, r8d
+            movsx rcx, ecx
             add eax, r10d
             movsx rax, eax
             sal rax, 8
             mov rdx, rax
             sar rdx, 63
-            idiv r8
+            idiv rcx
 
-            ; let (step := xmm2) = u24f8x4::new(slope, 1, 0, 0)
-            mov r8d, U24F8(1, 0)
+            ; let (sign_y := r9d) = dir.y.sign() as u24f8
+            mov r9d, eax
+            sar r9d, 31
+            sal r9d, 9
+            add r9d, U24F8(1, 0)
+
+            ; let (step := xmm2) = u24f8x4::new(slope, sign_y, 0, 0)
             pxor xmm2, xmm2
             pinsrd xmm2, eax, 0
-            pinsrd xmm2, r8d, 1
+            pinsrd xmm2, r9d, 1
 
         ; } else {
         jmp .endif_if_diry
@@ -345,10 +362,11 @@ Image_draw_line:
         ; }
         .endif_if_diry:
 
-        ; let (n_steps := r9d) = (to - from).abs().y as u32
+        ; let (n_steps := r9d) = (to - from).abs().y.round_up() as u32
         vpsubd xmm4, xmm1, xmm0
         pabsd xmm4, xmm4
         pextrd r9d, xmm4, 1
+        add r9d, U24F8(0, 255)
         shr r9d, 8
 
     ; }
