@@ -2,9 +2,12 @@
 %include "../memory.s"
 %include "../syscall.s"
 %include "../error.s"
+%include "../string.s"
 
 section .rodata
-    newline db LF
+    newline       db LF
+    i32x4_fmt.ptr db "({isize}, {isize}, {isize}, {isize})", LF
+    i32x4_fmt.len equ $-i32x4_fmt.ptr
 
 section .text
 
@@ -254,4 +257,53 @@ print_newline:
     syscall
     call exit_on_error
 
+    ret
+
+; #[systemv]
+; fn print_i32x4((value := xmm0): i32x4)
+print_i32x4:
+    PUSH rbp
+    mov rbp, rsp
+
+    .values         equ -64
+    .stack_size     equ ALIGNED(-.values)
+
+    ; let values: [isize; 4]
+    sub rsp, .stack_size
+
+    ; for i in 0..4 {
+    %assign i 0
+    %rep 4
+
+        ; values[i] = value[i] as i64
+        pextrd eax, xmm0, i
+        movsx rax, eax
+        mov qword [rbp + .values + 8 * i], rax
+
+    ; }
+    %assign i i+1
+    %endrep
+
+    ; format_buffer.clear()
+    mov rdi, format_buffer
+    call String_clear
+
+    ; format_buffer.format_array(i32x4_fmt, &values)
+    mov rdi, format_buffer
+    mov rsi, i32x4_fmt.len
+    mov rdx, i32x4_fmt.ptr
+    lea rcx, [rbp + .values]
+    call String_format_array
+
+    ; write(STDOUT, format_buffer.ptr, format_buffer.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, qword [format_buffer + String.ptr]
+    mov rdx, qword [format_buffer + String.len]
+    syscall
+    call exit_on_error
+
+    add rsp, .stack_size
+
+    POP rbp
     ret

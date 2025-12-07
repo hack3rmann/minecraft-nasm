@@ -70,6 +70,21 @@
     POPA
 %endmacro
 
+%macro DEBUG_I32X4 1
+    PUSHA
+
+    sub rsp, 32
+    vmovups [rsp], xmm0
+    
+    vmovaps xmm0, %1
+    call print_i32x4
+
+    vmovups xmm0, [rsp]
+    add rsp, 32
+
+    POPA
+%endmacro
+
 %macro DEBUG_STR 2
     PUSHA
     
@@ -115,6 +130,6 @@ extern format_buffer
 
 extern init_format, deinit_format
 
-extern print_uint_hex, print_uint, print_int, print_newline
+extern print_uint_hex, print_uint, print_int, print_newline, print_i32x4
 
 %endif ; !_DEBUG_INC
