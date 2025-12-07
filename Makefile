@@ -7,7 +7,7 @@ NASM_FLAGS = --gprefix _ -f elf64
 NASM_FLAGS_DEBUG = -F dwarf -g
 NASM_FLAGS_RELEASE = -O3
 LD = ld
-LD_FLAGS =
+LD_FLAGS = -nostdlib
 LD_FLAGS_DEBUG =
 LD_FLAGS_RELEASE = -s
 
