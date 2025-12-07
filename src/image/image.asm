@@ -453,25 +453,7 @@ Image_draw_line_better:
     vmovaps xmm3, xmm0
 
     ; let (from_dot_normal := r12d) = from.dot(normal)
-    vpslld xmm14, xmm0, 16       ; (from_lo_x16 := xmm14) = from << 16
-    psrld xmm14, 16              ; (from_lo := xmm14) = from_lo_x16 >> 16
-    vpslld xmm13, xmm2, 16       ; (normal_lo_x16 := xmm13) = normal << 16
-    psrld xmm13, 16              ; (normal_lo := xmm13) = normal_lo_x16 >> 16
-    vpsrld xmm12, xmm0, 16       ; (from_hi := xmm12) = from >> 16
-    vpsrld xmm11, xmm2, 16       ; (normal_hi := xmm11) = normal >> 16
-    vpmulld xmm10, xmm12, xmm11  ; (hi_mul_hi := xmm10) = from_hi * normal_hi
-    pslld xmm10, 24              ; (hi_mul_hi_shl := xmm10) = hi_mul_hi << 24
-    pmulld xmm12, xmm13          ; (hi_mul_lo := xmm12) = from_hi * normal_lo
-    pmulld xmm11, xmm14          ; (lo_mul_hi := xmm11) = from_lo * normal_hi
-    paddd xmm11, xmm12           ; (mixed_mul := xmm11) = hi_mul_lo + lo_mul_hi
-    pslld xmm11, 8               ; (mixed_mul_shl := xmm11) = mixed_mul << 8
-    paddd xmm10, xmm11           ; (hi_mid_sum := xmm10) = hi_mul_hi_shl + mixed_mul_shl
-    pmulld xmm14, xmm13          ; (lo_mul_lo := xmm14) = from_lo * normal_lo
-    psrld xmm14, 8               ; (lo_mul_lo_shr := xmm14) = lo_mul_lo >> 8
-    paddd xmm10, xmm14           ; (result := xmm10) = mixed_mul_shl + lo_mul_lo_shr
-    vphaddd xmm10, xmm10, xmm10
-    vphaddd xmm10, xmm10, xmm10
-    vmovd r12d, xmm10
+    DOT_I24F8X4 r12d, xmm0, xmm2
 
     ; while n_steps != 0 {
     .while_steps:
@@ -491,25 +473,7 @@ Image_draw_line_better:
         call Image_set_pixel
 
         ; let (distance := eax) = current.dot(normal) - from_dot_normal
-        vpslld xmm14, xmm3, 16       ; (current_lo_x16 := xmm14) = current << 16
-        psrld xmm14, 16              ; (current_lo := xmm14) = current_lo_x16 >> 16
-        vpslld xmm13, xmm2, 16       ; (normal_lo_x16 := xmm13) = normal << 16
-        psrld xmm13, 16              ; (normal_lo := xmm13) = normal_lo_x16 >> 16
-        vpsrld xmm12, xmm3, 16       ; (current_hi := xmm12) = current >> 16
-        vpsrld xmm11, xmm2, 16       ; (normal_hi := xmm11) = normal >> 16
-        vpmulld xmm10, xmm12, xmm11  ; (hi_mul_hi := xmm10) = current_hi * normal_hi
-        pslld xmm10, 24              ; (hi_mul_hi_shl := xmm10) = hi_mul_hi << 24
-        pmulld xmm12, xmm13          ; (hi_mul_lo := xmm12) = current_hi * normal_lo
-        pmulld xmm11, xmm14          ; (lo_mul_hi := xmm11) = current_lo * normal_hi
-        paddd xmm11, xmm12           ; (mixed_mul := xmm11) = hi_mul_lo + lo_mul_hi
-        pslld xmm11, 8               ; (mixed_mul_shl := xmm11) = mixed_mul << 8
-        paddd xmm10, xmm11           ; (hi_mid_sum := xmm10) = hi_mul_hi_shl + mixed_mul_shl
-        pmulld xmm14, xmm13          ; (lo_mul_lo := xmm14) = current_lo * normal_lo
-        psrld xmm14, 8               ; (lo_mul_lo_shr := xmm14) = lo_mul_lo >> 8
-        paddd xmm10, xmm14           ; (result := xmm10) = mixed_mul_shl + lo_mul_lo_shr
-        vphaddd xmm10, xmm10, xmm10
-        vphaddd xmm10, xmm10, xmm10
-        vmovd eax, xmm10
+        DOT_I24F8X4 eax, xmm3, xmm2
         sub eax, r12d
 
         ; let (y_increment := eax) = if distance <= 0 { 1 } else { 0 }
