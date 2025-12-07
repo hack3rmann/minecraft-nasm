@@ -421,27 +421,33 @@ Image_draw_line:
 ;     (to := xmm1): i24f8x4,
 ; )
 Image_draw_line_better:
-    PUSH r12
+    PUSH r12, r13
 
     ; let (delta := xmm2) = to - from
     vpsubd xmm2, xmm1, xmm0
+
+    ; let (abs_dir := xmm3) = dir.abs()
+    pabsd xmm3, xmm2
+
+    ; let (n_steps := r13d) = if abs_dir.y < abs_dir.x {
+    ;     abs_dir.x.round_up() as u32
+    ; } else { abs_dir.y.round_up() as u32 }
+    pextrd r13d, xmm3, 0
+    add r13d, U24F8(0, 255)
+    shr r13d, 8
+    pextrd r9d, xmm3, 1
+    add r9d, U24F8(0, 255)
+    shr r9d, 8
+    pextrd edx, xmm3, 0
+    pextrd eax, xmm3, 1
+    cmp eax, edx
+    cmovge r13d, r9d
 
     ; let (normal := xmm2) = i24f8x4::new(-delta.y, delta.x, ..delta)
     pshufd xmm2, xmm2, 0b11100001     ; (x, y, z, w) |-> (y, x, z, w)
     pxor xmm3, xmm3
     vpsubd xmm3, xmm3, xmm2           ; xmm3 = -(y, x, z, w)
     vpblendd xmm2, xmm3, 0b0001       ; xmm2 = (xmm3.x, ..xmm2)
-
-    ; let (current := xmm3) = from.floor() + i24f8x4::splat(i24f8::new(0, 128))
-    mov eax, 0xFFFFFF00
-    vmovd xmm3, eax
-    vpbroadcastd xmm3, xmm3
-    pand xmm3, xmm0
-    mov eax, U24F8(0, 128)
-    vmovd xmm4, eax
-    vpbroadcastd xmm4, xmm4
-    vpor xmm4, xmm3, xmm4
-    vpblendd xmm3, xmm4, 0b0011
 
     ; let (current := xmm3) = from
     vmovaps xmm3, xmm0
@@ -467,10 +473,10 @@ Image_draw_line_better:
     vphaddd xmm10, xmm10, xmm10
     vmovd r12d, xmm10
 
-    ; loop {
-    %assign COUNT 1024
-    %assign i COUNT
-    %rep COUNT
+    ; while n_steps != 0 {
+    .while_steps:
+    test r13d, r13d
+    jz .end_while_steps
 
         ; let ((x, y) := r8) = (current.x as u32, current.y as u32)
         pextrd eax, xmm3, 0
@@ -506,9 +512,9 @@ Image_draw_line_better:
         vmovd eax, xmm10
         sub eax, r12d
 
-        ; let (y_increment := eax) = if distance < 0 { 1 } else { 0 }
+        ; let (y_increment := eax) = if distance <= 0 { 1 } else { 0 }
         cmp eax, 0
-        setl al
+        setle al
         movzx eax, al
         shl eax, 8
 
@@ -523,9 +529,12 @@ Image_draw_line_better:
         pinsrd xmm4, eax, 0
         paddd xmm3, xmm4
 
+        ; n_steps -= 1
+        dec r13d
+
     ; }
-    %assign i i+1
-    %endrep
+    jmp .while_steps
+    .end_while_steps:
 
     ; let ((x, y) := r8) = (to.x as u32, to.y as u32)
     pextrd eax, xmm1, 0
@@ -539,8 +548,7 @@ Image_draw_line_better:
     mov rdx, r8
     call Image_set_pixel
 
-    .exit:
-    POP r12
+    POP r13, r12
     ret
 
 ; #[systemv]

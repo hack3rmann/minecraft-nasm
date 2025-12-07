@@ -50,7 +50,7 @@ section .data
     iteration dq 0
 
     align XMM_ALIGN
-    line_from dd U24F8(000, 42),  U24F8(100, 69), 0, 0
+    line_from dd U24F8(100, 42),  U24F8(100, 69), 0, 0
     line_to   dd U24F8(1000, 127), U24F8(400, 200), 0, 0
 
 section .bss
