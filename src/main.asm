@@ -25,8 +25,8 @@ section .rodata
     xdg_wm_base_str.ptr   db "xdg_wm_base"
     xdg_wm_base_str.len   equ $-xdg_wm_base_str.ptr
 
-    initial_window_width  equ 640
-    initial_window_height equ 480
+    initial_window_width  equ 2520
+    initial_window_height equ 1680
     initial_shm_size      equ 4 * initial_window_width * initial_window_height
 
     align XMM_ALIGN
@@ -50,8 +50,8 @@ section .data
     iteration dq 0
 
     align XMM_ALIGN
-    line_from dd U24F8(100, 0), U24F8(200, 0), 0, 0
-    line_to   dd U24F8(500, 127), U24F8(400, 200), 0, 0
+    line_from dd U24F8(000, 42),  U24F8(100, 69), 0, 0
+    line_to   dd U24F8(1000, 127), U24F8(400, 200), 0, 0
 
 section .bss
     ; static display_fd: usize
@@ -109,12 +109,12 @@ main:
         vmovaps xmm2, [c]
         call Image_fill_triangle
 
-        ; screen_image.draw_line(RGB(..), line_from, line_to)
+        ; screen_image.draw_line_better(RGB(..), line_from, line_to)
         mov rdi, screen_image
         mov esi, RGB(0xFF, 0, 0xFF)
         vmovaps xmm0, [line_from]
         vmovaps xmm1, [line_to]
-        call Image_draw_line
+        call Image_draw_line_better
 
         ; update_surface()
         call update_surface

@@ -414,6 +414,136 @@ Image_draw_line:
     ret
 
 ; #[systemv]
+; fn Image::draw_line_better(
+;     &mut self := rdi,
+;     (color := esi): Color,
+;     (from := xmm0): i24f8x4,
+;     (to := xmm1): i24f8x4,
+; )
+Image_draw_line_better:
+    PUSH r12
+
+    ; let (delta := xmm2) = to - from
+    vpsubd xmm2, xmm1, xmm0
+
+    ; let (normal := xmm2) = i24f8x4::new(-delta.y, delta.x, ..delta)
+    pshufd xmm2, xmm2, 0b11100001     ; (x, y, z, w) |-> (y, x, z, w)
+    pxor xmm3, xmm3
+    vpsubd xmm3, xmm3, xmm2           ; xmm3 = -(y, x, z, w)
+    vpblendd xmm2, xmm3, 0b0001       ; xmm2 = (xmm3.x, ..xmm2)
+
+    ; let (current := xmm3) = from.floor() + i24f8x4::splat(i24f8::new(0, 128))
+    mov eax, 0xFFFFFF00
+    vmovd xmm3, eax
+    vpbroadcastd xmm3, xmm3
+    pand xmm3, xmm0
+    mov eax, U24F8(0, 128)
+    vmovd xmm4, eax
+    vpbroadcastd xmm4, xmm4
+    vpor xmm4, xmm3, xmm4
+    vpblendd xmm3, xmm4, 0b0011
+
+    ; let (current := xmm3) = from
+    vmovaps xmm3, xmm0
+
+    ; let (from_dot_normal := r12d) = from.dot(normal)
+    vpslld xmm14, xmm0, 16       ; (from_lo_x16 := xmm14) = from << 16
+    psrld xmm14, 16              ; (from_lo := xmm14) = from_lo_x16 >> 16
+    vpslld xmm13, xmm2, 16       ; (normal_lo_x16 := xmm13) = normal << 16
+    psrld xmm13, 16              ; (normal_lo := xmm13) = normal_lo_x16 >> 16
+    vpsrld xmm12, xmm0, 16       ; (from_hi := xmm12) = from >> 16
+    vpsrld xmm11, xmm2, 16       ; (normal_hi := xmm11) = normal >> 16
+    vpmulld xmm10, xmm12, xmm11  ; (hi_mul_hi := xmm10) = from_hi * normal_hi
+    pslld xmm10, 24              ; (hi_mul_hi_shl := xmm10) = hi_mul_hi << 24
+    pmulld xmm12, xmm13          ; (hi_mul_lo := xmm12) = from_hi * normal_lo
+    pmulld xmm11, xmm14          ; (lo_mul_hi := xmm11) = from_lo * normal_hi
+    paddd xmm11, xmm12           ; (mixed_mul := xmm11) = hi_mul_lo + lo_mul_hi
+    pslld xmm11, 8               ; (mixed_mul_shl := xmm11) = mixed_mul << 8
+    paddd xmm10, xmm11           ; (hi_mid_sum := xmm10) = hi_mul_hi_shl + mixed_mul_shl
+    pmulld xmm14, xmm13          ; (lo_mul_lo := xmm14) = from_lo * normal_lo
+    psrld xmm14, 8               ; (lo_mul_lo_shr := xmm14) = lo_mul_lo >> 8
+    paddd xmm10, xmm14           ; (result := xmm10) = mixed_mul_shl + lo_mul_lo_shr
+    vphaddd xmm10, xmm10, xmm10
+    vphaddd xmm10, xmm10, xmm10
+    vmovd r12d, xmm10
+
+    ; loop {
+    %assign COUNT 1024
+    %assign i COUNT
+    %rep COUNT
+
+        ; let ((x, y) := r8) = (current.x as u32, current.y as u32)
+        pextrd eax, xmm3, 0
+        shr rax, 8
+        pextrd r8d, xmm3, 1
+        shr r8, 8
+        shl rax, 32
+        or r8, rax
+
+        ; self.set_pixel(color, (x, y))
+        mov rdx, r8
+        call Image_set_pixel
+
+        ; let (distance := eax) = current.dot(normal) - from_dot_normal
+        vpslld xmm14, xmm3, 16       ; (current_lo_x16 := xmm14) = current << 16
+        psrld xmm14, 16              ; (current_lo := xmm14) = current_lo_x16 >> 16
+        vpslld xmm13, xmm2, 16       ; (normal_lo_x16 := xmm13) = normal << 16
+        psrld xmm13, 16              ; (normal_lo := xmm13) = normal_lo_x16 >> 16
+        vpsrld xmm12, xmm3, 16       ; (current_hi := xmm12) = current >> 16
+        vpsrld xmm11, xmm2, 16       ; (normal_hi := xmm11) = normal >> 16
+        vpmulld xmm10, xmm12, xmm11  ; (hi_mul_hi := xmm10) = current_hi * normal_hi
+        pslld xmm10, 24              ; (hi_mul_hi_shl := xmm10) = hi_mul_hi << 24
+        pmulld xmm12, xmm13          ; (hi_mul_lo := xmm12) = current_hi * normal_lo
+        pmulld xmm11, xmm14          ; (lo_mul_hi := xmm11) = current_lo * normal_hi
+        paddd xmm11, xmm12           ; (mixed_mul := xmm11) = hi_mul_lo + lo_mul_hi
+        pslld xmm11, 8               ; (mixed_mul_shl := xmm11) = mixed_mul << 8
+        paddd xmm10, xmm11           ; (hi_mid_sum := xmm10) = hi_mul_hi_shl + mixed_mul_shl
+        pmulld xmm14, xmm13          ; (lo_mul_lo := xmm14) = current_lo * normal_lo
+        psrld xmm14, 8               ; (lo_mul_lo_shr := xmm14) = lo_mul_lo >> 8
+        paddd xmm10, xmm14           ; (result := xmm10) = mixed_mul_shl + lo_mul_lo_shr
+        vphaddd xmm10, xmm10, xmm10
+        vphaddd xmm10, xmm10, xmm10
+        vmovd eax, xmm10
+        sub eax, r12d
+
+        ; let (y_increment := eax) = if distance < 0 { 1 } else { 0 }
+        cmp eax, 0
+        setl al
+        movzx eax, al
+        shl eax, 8
+
+        ; current.y += y_increment
+        pxor xmm4, xmm4
+        pinsrd xmm4, eax, 1
+        paddd xmm3, xmm4
+
+        ; current.x += 1
+        mov eax, U24F8(1, 0)
+        pxor xmm4, xmm4
+        pinsrd xmm4, eax, 0
+        paddd xmm3, xmm4
+
+    ; }
+    %assign i i+1
+    %endrep
+
+    ; let ((x, y) := r8) = (to.x as u32, to.y as u32)
+    pextrd eax, xmm1, 0
+    shr rax, 8
+    pextrd r8d, xmm1, 1
+    shr r8, 8
+    shl rax, 32
+    or r8, rax
+
+    ; self.set_pixel(color, (x, y))
+    mov rdx, r8
+    call Image_set_pixel
+
+    .exit:
+    POP r12
+    ret
+
+; #[systemv]
 ; fn ImageSlice::fill(&mut self := rdi, (color := esi): Color)
 ImageSlice_fill:
     PUSH r12, r13, r14

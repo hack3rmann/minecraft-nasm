@@ -16,7 +16,7 @@ struc Image
 endstruc
 
 extern Image_fill, Image_slice, Image_fill_rect, Image_fill_triangle, \
-       Image_draw_line, Image_set_pixel
+       Image_draw_line, Image_set_pixel, Image_draw_line_better
 
 struc ImageSlice
     ; data: *mut u32
