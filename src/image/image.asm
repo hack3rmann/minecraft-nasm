@@ -1,5 +1,5 @@
 %include "../image.s"
-%include "../debug.s"
+%include "../function.s"
 %include "../memory.s"
 %include "../error.s"
 %include "../vector.s"
@@ -13,7 +13,7 @@ section .text
 
 ; #[systemv]
 ; fn Image::fill(&mut self := rdi, (color := esi): Color)
-Image_fill:
+FN Image_fill
     PUSH r12, r13
 
     ; let (self := r12) = self
@@ -34,7 +34,7 @@ Image_fill:
     call set32
 
     POP r13, r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn Image::slice(
@@ -43,7 +43,7 @@ Image_fill:
 ;     ((x, y) := rdx): (u32, u32),
 ;     ((width, height) := rcx): (u32, u32),
 ; ) -> ImageSlice
-Image_slice:
+FN Image_slice
     PUSH r12, r13, r14
 
     ; let ($ret := r12) = $ret
@@ -89,7 +89,7 @@ Image_slice:
     mov qword [r12 + ImageSlice.data], r10
 
     POP r14, r13, r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn Image::fill_rect(
@@ -98,12 +98,11 @@ Image_slice:
 ;     ((x, y) := rdx): (u32, u32),
 ;     ((width, height) := rcx): (u32, u32),
 ; )
-Image_fill_rect:
-    PUSH r12, r13, rbp
-    mov rbp, rsp
+FN Image_fill_rect
+    PUSH r12, r13
 
-    .slice              equ -ImageSlice.sizeof
-    .stack_size         equ ALIGNED(-.slice)
+    LOCAL .slice, ImageSlice.sizeof
+    STACK .stack_size
 
     ; let slice: Image
     sub rsp, .stack_size
@@ -129,7 +128,7 @@ Image_fill_rect:
     add rsp, .stack_size
 
     POP rbp, r13, r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn Image::fill_triangle(
@@ -139,7 +138,7 @@ Image_fill_rect:
 ;     (b := xmm1): u24f8x4,
 ;     (c := xmm2): u24f8x4,
 ; )
-Image_fill_triangle:
+FN Image_fill_triangle
     ; a.y = self.height as u24f8 - a.y - 1
     vpbroadcastd xmm5, dword [rdi + Image.height]
     pslld xmm5, 8
@@ -185,8 +184,7 @@ Image_fill_triangle:
 
     ; self.fill_rect(color, (x, y), (width, height))
     call Image_fill_rect
-
-    ret
+END_FN
 
 ; #[fastcall(rax, rdx, r8)]
 ; fn Image::set_pixel(
@@ -194,7 +192,7 @@ Image_fill_triangle:
 ;     (color := esi): Color,
 ;     ((x, y) := rdx): (u32, u32),
 ; )
-Image_set_pixel:
+FN Image_set_pixel
     ; let ((x, y) := r8) = (x, y)
     mov r8, rdx
 
@@ -220,8 +218,7 @@ Image_set_pixel:
     shl rax, 2
     add rax, qword [rdi + Image.data]
     mov dword [rax], esi
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn Image::draw_line(
@@ -230,7 +227,7 @@ Image_set_pixel:
 ;     (from := xmm0): i24f8x4,
 ;     (to := xmm1): i24f8x4,
 ; )
-Image_draw_line:
+FN Image_draw_line
     PUSH r12, r13, r14, r15, rbx
 
     ; let (delta := xmm2) = to - from
@@ -379,11 +376,11 @@ Image_draw_line:
     call Image_set_pixel
 
     POP rbx, r15, r14, r13, r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn ImageSlice::fill(&mut self := rdi, (color := esi): Color)
-ImageSlice_fill:
+FN ImageSlice_fill
     PUSH r12, r13, r14
 
     ; let (self := r12) = self
@@ -413,4 +410,4 @@ ImageSlice_fill:
     .end_for:
 
     POP r14, r13, r12
-    ret
+END_FN

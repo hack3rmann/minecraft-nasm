@@ -3,6 +3,7 @@
 %include "../syscall.s"
 %include "../error.s"
 %include "../string.s"
+%include "../function.s"
 
 section .rodata
     newline       db LF
@@ -13,12 +14,8 @@ section .text
 
 ; #[systemv]
 ; fn print_int((value := rdi): i64)
-print_int:
-    push rbp
-    push r12
-    push r13
-    push rbx
-    mov rbp, rsp
+FN print_int
+    PUSH r12, r13, rbx
 
     .digits             equ -24
     .n_digits           equ 24
@@ -109,21 +106,15 @@ print_int:
 
     add rsp, .stack_size
 
-    pop rbx
-    pop r13
-    pop r12
-    pop rbp
-    ret
+    POP rbx, r13, r12
+END_FN
 
 ; #[systemv]
 ; fn print_uint((value := rdi): usize)
-print_uint:
-    push rbp
-    mov rbp, rsp
-
-    .digits             equ -24
-    .n_digits           equ 24
-    .stack_size         equ ALIGNED(-.digits)
+FN print_uint
+    .n_digits equ 24
+    LOCAL .digits, .n_digits
+    STACK .stack_size
 
     ; let digits: [u8; 24]
     sub rsp, .stack_size
@@ -178,18 +169,13 @@ print_uint:
     call exit_on_error
 
     add rsp, .stack_size
-
-    pop rbp
-    ret
+END_FN
 
 ; fn print_uint_hex((value := rdi): usize)
-print_uint_hex:
-    push rbp
-    mov rbp, rsp
-
-    .digits       equ -24
-    .n_digits     equ 16
-    .stack_size   equ ALIGNED(-.digits)
+FN print_uint_hex
+    .n_digits equ 16
+    LOCAL .digits, 24
+    STACK .stack_size
 
     ; let digits: [u8; 19] = [0; 19]
     push 0
@@ -242,13 +228,11 @@ print_uint_hex:
     call exit_on_error
 
     add rsp, .stack_size
-
-    pop rbp
-    ret
+END_FN
 
 ; #[systemv]
 ; fn print_newline()
-print_newline:
+FN print_newline
     ; write(STDOUT, &newline, 1)
     mov rax, SYSCALL_WRITE
     mov rdi, STDOUT
@@ -256,17 +240,13 @@ print_newline:
     mov rdx, 1
     syscall
     call exit_on_error
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn print_i32x4((value := xmm0): i32x4)
-print_i32x4:
-    PUSH rbp
-    mov rbp, rsp
-
-    .values         equ -64
-    .stack_size     equ ALIGNED(-.values)
+FN print_i32x4
+    LOCAL .values, 64
+    STACK .stack_size
 
     ; let values: [isize; 4]
     sub rsp, .stack_size
@@ -304,6 +284,4 @@ print_i32x4:
     call exit_on_error
 
     add rsp, .stack_size
-
-    POP rbp
-    ret
+END_FN

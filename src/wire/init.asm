@@ -3,6 +3,7 @@
 %include "../wire.s"
 %include "../debug.s"
 %include "../env.s"
+%include "../function.s"
 
 section .rodata
     xdg_runtime_dir_str           db "XDG_RUNTIME_DIR"
@@ -19,7 +20,7 @@ section .text
 
 ; #[systemv]
 ; fn get_wayland_socket_path(($ret := rdi): *mut String) -> String
-get_wayland_socket_path:
+FN get_wayland_socket_path
     PUSH r12, r13, r14
 
     ; let ($ret := r12) = $ret
@@ -112,4 +113,4 @@ get_wayland_socket_path:
     .display_end_if:
 
     POP r14, r13, r12
-    ret
+END_FN

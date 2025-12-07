@@ -2,7 +2,7 @@
 %include "../syscall.s"
 %include "../shm.s"
 %include "../error.s"
-%include "../debug.s"
+%include "../function.s"
 
 section .rodata
     dev_shm_path.ptr      db "/dev/shm/minecraft", 0
@@ -12,7 +12,7 @@ section .text
 
 ; #[systemv]
 ; fn Shm::new(($ret := rdi): *mut Shm, (shm_size := rsi): usize) -> Shm
-Shm_new:
+FN Shm_new
     PUSH r12, r13
 
     ; mov ($ret := r12) = $ret
@@ -83,11 +83,11 @@ Shm_new:
     mov qword [r12 + Shm.size], r13
 
     POP r13, r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn Shm::drop(&mut self := rdi)
-Shm_drop:
+FN Shm_drop
     PUSH r12
 
     ; let (self := r12) = self
@@ -118,4 +118,4 @@ Shm_drop:
 
     .exit:
     POP r12
-    ret
+END_FN

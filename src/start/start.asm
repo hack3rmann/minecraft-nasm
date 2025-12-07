@@ -1,5 +1,6 @@
 %include "../syscall.s"
 %include "../start.s"
+%include "../function.s"
 
 section .bss
     ; pub static argc: usize
@@ -19,7 +20,7 @@ section .text
 ; #[nocall]
 ; #[noreturn]
 ; pub fn start() -> !
-start:
+FN start
     ; Higher addresses
     ; ┌───────────────────┐
     ; │ ...               │
@@ -41,16 +42,16 @@ start:
     ; Lower addresses
 
     ; argc = get_argc_from_stack()
-    mov rax, qword [rsp]
+    mov rax, qword [rsp + 8]
     mov qword [argc], rax
 
     ; argv = get_argv_from_stack()
-    lea rax, [rsp+8]
+    lea rax, [rsp + 16]
     mov qword [argv], rax
 
     ; envp = get_envp_from_stack()
     mov rax, qword [argc]
-    lea rax, [8*rax+16+rsp]
+    lea rax, [8 * rax + 24 + rsp]
     mov qword [envp], rax
 
     ; let stack_align = rsp % 16
@@ -71,3 +72,4 @@ start:
     mov rdi, rax
     mov rax, SYSCALL_EXIT
     syscall
+END_FN

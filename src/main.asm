@@ -9,6 +9,7 @@
 %include "shm.s"
 %include "image.s"
 %include "vector.s"
+%include "function.s"
 
 %define CLEAR_COLOR RGB(0xF, 0xF, 0xF)
 ; %define BENCHMARK
@@ -75,7 +76,7 @@ section .text
 
 ; #[systemv]
 ; fn main() -> i64
-main:
+FN main
     ; init_format()
     call init_format
 
@@ -137,11 +138,11 @@ main:
 
     ; return EXIT_SUCCESS
     xor rax, rax
-    ret
+END_FN
 
 ; #[systemv]
 ; fn update_surface()
-update_surface:
+FN update_surface
     ; wire_send_surface_attach(wl_surface_id, wl_buffer_id, 0, 0)
     mov rdi, qword [wl_surface_id]
     mov rsi, qword [wl_buffer_id]
@@ -160,12 +161,11 @@ update_surface:
     ; wire_send_surface_commit(wl_surface_id)
     mov rdi, qword [wl_surface_id]
     call wire_send_surface_commit
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn wayland_init()
-wayland_init:
+FN wayland_init
     ; socket_path = get_wayland_socket_path()
     mov rdi, socket_path
     call get_wayland_socket_path
@@ -347,12 +347,11 @@ wayland_init:
     mov r9, SHM_FORMAT_XRGB8888
     call wire_send_shm_pool_create_buffer
     mov qword [wl_buffer_id], rax
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn wayland_deinit()
-wayland_deinit:
+FN wayland_deinit
     ; drop(shm)
     mov rdi, shm
     call Shm_drop
@@ -366,14 +365,12 @@ wayland_deinit:
     ; drop(socket_path)
     mov rdi, socket_path
     call String_drop
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn handle_registry_global((_registry_id := rdi): u32)
-handle_registry_global:
-    PUSH r12, r13, rbp
-    mov rbp, rsp
+FN handle_registry_global
+    PUSH r12, r13
 
     struc GlobalFmtArgs
         ; name: usize
@@ -385,8 +382,8 @@ handle_registry_global:
         .sizeof             equ $-.name
     endstruc
 
-    .fmt_args       equ -GlobalFmtArgs.sizeof
-    .stack_size     equ ALIGNED(-.fmt_args)
+    LOCAL .fmt_args, GlobalFmtArgs.sizeof
+    STACK .stack_size
 
     ; let fmt_args: struct {
     ;     name: usize,
@@ -507,17 +504,17 @@ handle_registry_global:
 
     add rsp, .stack_size
 
-    POP rbp, r13, r12
-    ret
+    POP r13, r12
+END_FN
 
 ; #[systemv]
 ; fn handle_buffer_release((buffer_id := rdi): u32)
-handle_buffer_release:
-    ret
+FN handle_buffer_release
+END_FN
 
 ; #[systemv]
 ; fn handle_xdg_surface_configure((xdg_surface_id := rdi): u32)
-handle_xdg_surface_configure:
+FN handle_xdg_surface_configure
     ; let (serial := rsi) = wire_message.body.serial
     xor rsi, rsi
     mov esi, dword [wire_message + WireMessageHeader.sizeof + XdgSurfaceConfigureEvent.serial]
@@ -526,12 +523,11 @@ handle_xdg_surface_configure:
     ; mov rdi, rdi
     ; mov rsi, rsi
     call wire_send_xdg_surface_ack_configure
-    
-    ret
+END_FN
 
 ; #[systemv]
 ; fn handle_wm_base_ping((wm_base_id := rdi): u32)
-handle_wm_base_ping:
+FN handle_wm_base_ping
     ; let (serial := rsi) = wire_message.body.serial
     xor rsi, rsi
     mov esi, dword [wire_message + WireMessageHeader.sizeof + WmBasePingEvent.serial]
@@ -540,12 +536,11 @@ handle_wm_base_ping:
     ; mov rdi, rdi
     ; mov rsi, rsi
     call wire_send_wm_base_pong
-    
-    ret
+END_FN
 
 ; #[systemv]
 ; fn handle_toplevel_configure((toplevel_id := rdi): u32)
-handle_toplevel_configure:
+FN handle_toplevel_configure
     PUSH r12
 
     ; if wire_message.width == 0 { return }
@@ -623,11 +618,11 @@ handle_toplevel_configure:
 
     .exit:
     POP r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn handle_toplevel_close((_toplevel_id := rdi): u32)
-handle_toplevel_close:
+FN handle_toplevel_close
     ; is_window_open = false
     mov byte [is_window_open], 0
-    ret
+END_FN

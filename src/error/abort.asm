@@ -1,13 +1,13 @@
 %include "../syscall.s"
 %include "../error.s"
-%include "../debug.s"
+%include "../function.s"
 
 section .text
 
 ; #[noreturn]
 ; #[jumpable]
 ; fn abort() -> !
-abort:
+FN abort
     ; let (pid := rax) = getpid()
     mov rax, SYSCALL_GETPID
     syscall
@@ -27,6 +27,7 @@ abort:
     ; // loop forever just in case
     .loop:
     jmp .loop
+END_FN
 
 ; #[fastcall]
 ; fn exit_on_error((code := rax): usize)

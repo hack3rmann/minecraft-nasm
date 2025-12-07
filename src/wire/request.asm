@@ -4,6 +4,7 @@
 %include "../error.s"
 %include "../memory.s"
 %include "../debug.s"
+%include "../function.s"
 
 section .text
 
@@ -56,8 +57,8 @@ wire_release_id:
 
 ; #[systemv]
 ; fn wire_send_display_sync() -> u32 := rax
-wire_send_display_sync:
-    push r12
+FN wire_send_display_sync
+    PUSH r12
 
     ; wire_begin_request(wire_id.wl_display, wire_request.display_sync_opcode)
     mov rdi, wire_id.wl_display
@@ -81,13 +82,13 @@ wire_send_display_sync:
     ; return id
     mov rax, r12
 
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; #[systemv]
 ; fn wire_send_display_get_registry() -> u32 := rax
-wire_send_display_get_registry:
-    push r12
+FN wire_send_display_get_registry
+    PUSH r12
 
     ; wire_begin_request(wire_id.wl_display, wire_request.display_get_registry_opcode)
     mov rdi, wire_id.wl_display
@@ -111,8 +112,8 @@ wire_send_display_get_registry:
     ; return id
     mov rax, r12
 
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; #[systemv]
 ; fn wire_send_registry_bind(
@@ -120,12 +121,8 @@ wire_send_display_get_registry:
 ;     (version := rsi): u32,
 ;     (interface := rdx:rcx): Str
 ; ) -> u32 := rax
-wire_send_registry_bind:
-    push r12
-    push r13
-    push r14
-    push r15
-    push rbx
+FN wire_send_registry_bind
+    PUSH r12, r13, r14, r15, rbx
 
     ; let (name := r12) = name
     mov r12, rdi
@@ -178,17 +175,13 @@ wire_send_registry_bind:
     ; return id
     mov rax, r13
 
-    pop rbx
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP rbx, r15, r14, r13, r12
+END_FN
 
 ; #[systemv]
 ; fn wire_flush((display_fd := rdi): Fd)
-wire_flush:
-    push r12
+FN wire_flush
+    PUSH r12
 
     ; let (display_fd := r12) = display_fd
     mov r12, rdi
@@ -228,20 +221,18 @@ wire_flush:
     ; wire_message_n_fds = 0
     mov qword [wire_message_n_fds], 0
 
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; #[systemv]
 ; #[private]
 ; fn wire_flush_fds((display_fd := rdi): Fd)
-wire_flush_fds:
-    push r12
-    push rbp
-    mov rbp, rsp
+FN wire_flush_fds
+    PUSH r12
 
-    .io                   equ -iovec.sizeof
-    .msg                  equ -msghdr.sizeof + .io
-    .stack_size           equ ALIGNED(-.msg)
+    LOCAL .io, iovec.sizeof
+    LOCAL .msg, msghdr.sizeof
+    STACK .stack_size
 
     ; let msg: msghdr
     ; let io: iovec
@@ -300,9 +291,8 @@ wire_flush_fds:
 
     add rsp, .stack_size
 
-    pop rbp
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; #[fastcall(rax)]
 ; fn wire_write_uint((value := edi): u32)
@@ -337,9 +327,8 @@ wire_write_fd:
 
 ; #[systemv]
 ; fn wire_write_str(Str { len := rdi, ptr := rsi })
-wire_write_str:
-    push r12
-    push r13
+FN wire_write_str
+    PUSH r12, r13
 
     ; let (len := r12) = len
     mov r12, rdi
@@ -372,9 +361,8 @@ wire_write_str:
     ; wire_current_message_len += padded_len
     add qword [wire_current_message_len], rax
 
-    pop r13
-    pop r12
-    ret
+    POP r13, r12
+END_FN
 
 ; #[fastcall(rax)]
 ; fn wire_begin_request((object_id := edi): u32, (opcode := si): u16)
@@ -420,9 +408,8 @@ wire_end_request:
 
 ; #[systemv]
 ; fn wire_send_compositor_create_surface((compositor_id := rdi): u32) -> u32 := rax
-wire_send_compositor_create_surface:
-    push r12
-    push r13
+FN wire_send_compositor_create_surface
+    PUSH r12, r13
 
     ; let (compositor_id := r12) = compositor_id
     mov r12, rdi
@@ -449,17 +436,13 @@ wire_send_compositor_create_surface:
     ; return id
     mov rax, r13
 
-    pop r13
-    pop r12
-    ret
+    POP r13, r12
+END_FN
 
 ; #[systemv]
 ; fn wire_send_registry_bind_global((global := rdi): &RegistryGlobal) -> u32 := rax
-wire_send_registry_bind_global:
-    push r12
-    push r13
-    push r14
-    push r15
+FN wire_send_registry_bind_global
+    PUSH r12, r13, r14, r15
 
     ; let (global := r12) = global
     mov r12, rdi
@@ -475,11 +458,8 @@ wire_send_registry_bind_global:
     mov r15, rcx
     call wire_send_registry_bind
 
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP r15, r14, r13, r12
+END_FN
 
 ; #[systemv]
 ; fn wire_send_shm_create_pool(
@@ -487,11 +467,8 @@ wire_send_registry_bind_global:
 ;     (fd := rsi): u32,
 ;     (size := rdx): u32
 ; ) -> u32 := rax
-wire_send_shm_create_pool:
-    push r12
-    push r13
-    push r14
-    push r15
+FN wire_send_shm_create_pool
+    PUSH r12, r13, r14, r15
 
     ; let (shm_id := r12) = shm_id
     mov r12, rdi
@@ -532,15 +509,12 @@ wire_send_shm_create_pool:
     ; return id
     mov rax, r15
 
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP r15, r14, r13, r12
+END_FN
 
 ; #[systemv]
 ; fn wire_send_shm_pool_destroy((shm_pool_id := rdi): u32)
-wire_send_shm_pool_destroy:
+FN wire_send_shm_pool_destroy
     ; wire_begin_request(shm_pool_id, wire_request.shm_pool_destroy_opcode)
     ; mov rdi, rdi
     mov rsi, wire_request.shm_pool_destroy_opcode
@@ -548,8 +522,7 @@ wire_send_shm_pool_destroy:
 
     ; wire_end_request()
     call wire_end_request
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn wire_send_shm_pool_create_buffer(
@@ -560,19 +533,16 @@ wire_send_shm_pool_destroy:
 ;     (stride := r8): u32,
 ;     (format := r9): WlShmFormat
 ; ) -> u32 := rax
-wire_send_shm_pool_create_buffer:
-    push r12
-    push rbp
-    mov rbp, rsp
+FN wire_send_shm_pool_create_buffer
+    PUSH r12
 
-    .format                 equ -4
-    .stride                 equ -4 + .format
-    .height                 equ -4 + .stride
-    .width                  equ -4 + .height
-    .offset                 equ -4 + .width
-    .shm_pool_id            equ -4 + .offset
-
-    .stack_size             equ ALIGNED(-.shm_pool_id)
+    LOCAL .format, 4
+    LOCAL .stride, 4
+    LOCAL .height, 4
+    LOCAL .width, 4
+    LOCAL .offset, 4
+    LOCAL .shm_pool_id, 4
+    STACK .stack_size
 
     sub rsp, .stack_size
 
@@ -634,18 +604,15 @@ wire_send_shm_pool_create_buffer:
 
     add rsp, .stack_size
     
-    pop rbp
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; #[systemv]
 ; fn wire_send_wm_base_get_xdg_surface(
 ;     (wm_base_id := rdi): u32, (wl_surface_id := rsi): u32,
 ; ) -> u32 := rax
-wire_send_wm_base_get_xdg_surface:
-    push r12
-    push r13
-    push r14
+FN wire_send_wm_base_get_xdg_surface
+    PUSH r12, r13, r14
 
     ; let (wm_base_id := r12) = wm_base_id
     mov r12, rdi
@@ -679,16 +646,13 @@ wire_send_wm_base_get_xdg_surface:
     ; return id
     mov rax, r14
 
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP r14, r13, r12
+END_FN
 
 ; #[systemv]
 ; fn wire_send_xdg_surface_get_toplevel((xdg_surface_id := rdi): u32) -> u32 := rax
-wire_send_xdg_surface_get_toplevel:
-    push r12
-    push r13
+FN wire_send_xdg_surface_get_toplevel
+    PUSH r12, r13
 
     ; let (xdg_surface_id := r12) = xdg_surface_id
     mov r12, rdi
@@ -715,9 +679,8 @@ wire_send_xdg_surface_get_toplevel:
     ; return id
     mov rax, r13
 
-    pop r13
-    pop r12
-    ret
+    POP r13, r12
+END_FN
 
 ; NOTE(hack3rmann): the behavior exactly matches
 ;
@@ -732,10 +695,8 @@ wire_send_xdg_surface_get_toplevel:
 ;     Str { title_len := rsi, title_ptr := rdx } @ title,
 ; )
 wire_send_xdg_toplevel_set_app_id:
-wire_send_xdg_toplevel_set_title:
-    push r12
-    push r13
-    push r14
+FN wire_send_xdg_toplevel_set_title
+    PUSH r12, r13, r14
 
     ; let (xdg_toplevel_id := r12) = xdg_toplevel_id
     mov r12, rdi
@@ -759,10 +720,8 @@ wire_send_xdg_toplevel_set_title:
     ; wire_end_request()
     call wire_end_request
 
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP r14, r13, r12
+END_FN
 
 ; fn wire_send_surface_attach(
 ;     (wl_surface_id := rdi): u32,
@@ -770,11 +729,8 @@ wire_send_xdg_toplevel_set_title:
 ;     (x := rdx): u32,
 ;     (y := rcx): u32,
 ; )
-wire_send_surface_attach:
-    push r12
-    push r13
-    push r14
-    push r15
+FN wire_send_surface_attach
+    PUSH r12, r13, r14, r15
 
     ; let (wl_surface_id := r12) = wl_surface_id
     mov r12, rdi
@@ -808,11 +764,8 @@ wire_send_surface_attach:
     ; wire_end_request()
     call wire_end_request
 
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP r15, r14, r13, r12
+END_FN
 
 ; fn wire_send_surface_damage(
 ;     (wl_surface_id := rdi): u32,
@@ -821,12 +774,8 @@ wire_send_surface_attach:
 ;     (width := rcx): u32,
 ;     (height := r8): u32,
 ; )
-wire_send_surface_damage:
-    push r12
-    push r13
-    push r14
-    push r15
-    push rbx
+FN wire_send_surface_damage
+    PUSH r12, r13, r14, r15, rbx
 
     ; let (wl_surface_id := r12) = wl_surface_id
     mov r12, rdi
@@ -867,16 +816,12 @@ wire_send_surface_damage:
     ; wire_end_request()
     call wire_end_request
 
-    pop rbx
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP rbx, r15, r14, r13, r12
+END_FN
 
 ; #[systemv]
 ; fn wire_send_surface_commit((wl_surface_id := rdi): u32)
-wire_send_surface_commit:
+FN wire_send_surface_commit
     ; wire_begin_request(wl_surface_id, wire_request.surface_commit_opcode)
     ; mov rdi, rdi
     mov rsi, wire_request.surface_commit_opcode
@@ -884,14 +829,12 @@ wire_send_surface_commit:
 
     ; wire_end_request()
     call wire_end_request
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn wire_send_xdg_surface_ack_configure((xdg_surface_id := rdi): u32, (serial := rsi): u32)
-wire_send_xdg_surface_ack_configure:
-    push r12
-    push r13
+FN wire_send_xdg_surface_ack_configure
+    PUSH r12, r13
 
     ; let (xdg_surface_id := r12) = xdg_surface_id
     mov r12, rdi
@@ -911,14 +854,12 @@ wire_send_xdg_surface_ack_configure:
     ; wire_end_request()
     call wire_end_request
 
-    pop r13
-    pop r12
-    ret
+    POP r13, r12
+END_FN
 
 ; fn wire_send_wm_base_pong((wm_base_id := rdi): u32, (serial := rsi): u32)
-wire_send_wm_base_pong:
-    push r12
-    push r13
+FN wire_send_wm_base_pong
+    PUSH r12, r13
 
     ; let (wm_base_id := r12) = wm_base_id
     mov r12, rdi
@@ -938,13 +879,12 @@ wire_send_wm_base_pong:
     ; wire_end_request()
     call wire_end_request
 
-    pop r13
-    pop r12
-    ret
+    POP r13, r12
+END_FN
 
 ; #[systemv]
 ; fn wire_send_buffer_destroy((wl_buffer_id := rdi): u32)
-wire_send_buffer_destroy:
+FN wire_send_buffer_destroy
     ; wire_begin_request(wl_buffer_id, wire_request.buffer_destroy_opcode)
     ; mov rdi, rdi
     mov rsi, wire_request.buffer_destroy_opcode
@@ -952,5 +892,4 @@ wire_send_buffer_destroy:
 
     ; wire_end_request()
     call wire_end_request
-
-    ret
+END_FN

@@ -2,6 +2,7 @@
 %include "../debug.s"
 %include "../syscall.s"
 %include "../error.s"
+%include "../function.s"
 
 section .rodata
     arg_type_usize        db "usize"
@@ -33,9 +34,8 @@ section .text
 
 ; #[systemv]
 ; fn parse_arg_type(Str { len := rdi, ptr := rsi }) -> ArgType := al
-parse_arg_type:
-    push r12
-    push r13
+FN parse_arg_type
+    PUSH r12, r13
 
     ; let (len := r12) = len
     mov r12, rdi
@@ -87,14 +87,13 @@ parse_arg_type:
     mov al, ARGTYPE_INVALID
 
     .exit:
-    pop r13
-    pop r12
-    ret
+    POP r13, r12
+END_FN
 
 ; /// Parses until first `({|})`
 ; #[systemv]
 ; fn parse_raw_string(Str { len := rdi, ptr := rsi }) -> usize := rax
-parse_raw_string:
+FN parse_raw_string
     ; let (i := rax) = 0
     xor rax, rax
 
@@ -119,12 +118,12 @@ parse_raw_string:
     .end_while:
 
     ; return i
-    ret
+END_FN
 
 ; /// Parses first `({{|}})`
 ; #[systemv]
 ; fn parse_arg_escape(Str { len := rdi, ptr := rsi }) -> usize := rax
-parse_arg_escape:
+FN parse_arg_escape
     ; let (result := rax) = 0
     xor rax, rax
 
@@ -147,12 +146,12 @@ parse_arg_escape:
     mov rax, 0
 
     .exit:
-    ret
+END_FN
 
 ; /// Parses first `{.*}`
 ; #[systemv]
 ; fn parse_arg_string(Str { len := rdi, ptr := rsi }) -> usize := rax
-parse_arg_string:
+FN parse_arg_string
     ; let (result := rax) = 0
     xor rax, rax
 
@@ -209,18 +208,16 @@ parse_arg_string:
     inc rax
 
     .exit:
-    ret
+END_FN
 
 ; #[systemv]
-; String_format_once(
+; fn String::format_once(
 ;     &mut self := rdi,
 ;     (arg_type := rsi): ArgType,
 ;     (args := rdx): *mut usize,
 ; ) -> usize := rax
-String_format_once:
-    push r12
-    push r13
-    push r14
+FN String_format_once
+    PUSH r12, r13, r14
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -304,23 +301,17 @@ String_format_once:
     xor rax, rax
 
     .exit:
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP r14, r13, r12
+END_FN
 
 ; #[systemv]
-; String_format_array(
+; fn String::format_array(
 ;     &mut self := rdi,
 ;     Str { fmt.len := rsi, fmt.ptr := rdx }: Str,
 ;     (args := rcx): *mut usize,
 ; )
-String_format_array:
-    push r12
-    push r13
-    push r14
-    push r15
-    push rbx
+FN String_format_array
+    PUSH r12, r13, r14, r15, rbx
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -436,9 +427,5 @@ String_format_array:
     .end_while:
 
     .exit:
-    pop rbx
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP rbx, r15, r14, r13, r12
+END_FN

@@ -1,34 +1,6 @@
 %ifndef _DEBUG_INC
 %define _DEBUG_INC
 
-%define N_PUSHAS 16
-
-%macro PUSH 0-*
-    %rep %0
-        push %1
-    %rotate 1
-    %endrep
-%endmacro
-
-%macro POP 0-*
-    %rep %0
-        POP %1
-    %rotate 1
-    %endrep
-%endmacro
-
-%macro PUSHA 0
-    pushf
-    PUSH rax, rcx, rdx, rbx, rsp, rbp, rsi, rdi, \
-         r8, r9, r10, r11, r12, r13, r14, r15
-%endmacro
-
-%macro POPA 0
-    POP r15, r14, r13, r12, r11, r10, r9, r8, rdi, rsi, rbp, \
-        rsp, rbx, rdx, rcx, rax
-    popf
-%endmacro
-
 %macro DEBUG_HEX 1
     PUSHA
 

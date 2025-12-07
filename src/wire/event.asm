@@ -4,6 +4,7 @@
 %include "../debug.s"
 %include "../error.s"
 %include "../memory.s"
+%include "../function.s"
 
 section .rodata
     display_error_fmt.ptr         db "wayland error: WlDisplayError {{ ", \
@@ -16,7 +17,7 @@ section .text
 
 ; #[systemv]
 ; fn wire_read_event((display_fd := rdi): Fd)
-wire_read_event:
+FN wire_read_event
     PUSH r12
 
     ; let (display_fd := r12) = display_fd
@@ -58,11 +59,11 @@ wire_read_event:
     .end_if:
 
     POP r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn wire_dispatch_event()
-wire_dispatch_event:
+FN wire_dispatch_event
     PUSH r12
 
     ; let (object_id := r12) = wire_message.object_id
@@ -89,11 +90,11 @@ wire_dispatch_event:
 
     .exit:
     POP r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn wire_display_roundtrip((display_fd := rdi): Fd)
-wire_display_roundtrip:
+FN wire_display_roundtrip
     PUSH r12, r13
 
     ; mov (display_fd := r12) = display_fd
@@ -137,7 +138,7 @@ wire_display_roundtrip:
     .end_loop:
 
     POP r13, r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn wire_set_dispatcher(
@@ -145,39 +146,32 @@ wire_display_roundtrip:
 ;     (opcode := rsi): u32,
 ;     (dispatch := rdx): fn(u32),
 ; )
-wire_set_dispatcher:
+FN wire_set_dispatcher
     ; wire_callbacks[type][opcode] = dispatch
     mov rax, rdi
     shl rax, WIRE_MAX_N_CALLBACKS_LOG2
     mov qword [wire_callbacks + rax + 8 * rsi], rdx
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn wire_get_dispatcher((type := rdi): WlObjectType, (opcode := rsi): u32) -> fn(u32) := rax
-wire_get_dispatcher:
+FN wire_get_dispatcher
     ; wire_callbacks[type][opcode] = dispatch
     mov rax, rdi
     shl rax, WIRE_MAX_N_CALLBACKS_LOG2
     mov rax, qword [wire_callbacks + rax + 8 * rsi]
-
-    ret
+END_FN
 
 ; #[jumpable]
 ; #[noreturn]
 ; fn wire_handle_display_error((_display_id := rdi): u32)
-wire_handle_display_error:
-    PUSH rbp
-    mov rbp, rsp
-
-    .fmt_args       equ -32
-
+FN wire_handle_display_error
+    LOCAL .fmt_args, 32
     .object_id      equ .fmt_args
     .code           equ .fmt_args + 8
     .message.len    equ .fmt_args + 16
     .message.ptr    equ .fmt_args + 24
-
-    .stack_size     equ ALIGNED(-.fmt_args)
+    STACK .stack_size
 
     ; let fmt_args: struct {
     ;     object_id: usize,
@@ -226,13 +220,13 @@ wire_handle_display_error:
 
     ; abort()
     jmp abort
+END_FN
 
 ; #[systemv]
 ; fn wire_handle_delete_id((_display_id := rdi): u32)
-wire_handle_delete_id:
+FN wire_handle_delete_id
     ; wire_release_id(wire_message.body.id)
     xor rdi, rdi
     mov edi, dword [wire_message + WireMessageHeader.sizeof + DisplayDeleteIdEvent.id]
     call wire_release_id
-
-    ret
+END_FN

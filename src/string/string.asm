@@ -1,12 +1,13 @@
 %include "../string.s"
 %include "../memory.s"
 %include "../debug.s"
+%include "../function.s"
 
 section .text
 
 ; #[systemv]
 ; fn String::new(($return := rdi): *mut Self) -> Self
-String_new:
+FN String_new
     ; $return->len = 0
     mov qword [rdi + String.len], 0
 
@@ -15,13 +16,12 @@ String_new:
 
     ; $return->cap = 0
     mov qword [rdi + String.cap], 0
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn String::with_capacity(($return := rdi): *mut Self, (capacity := rsi): usize) -> Self
-String_with_capacity:
-    push r12
+FN String_with_capacity
+    PUSH r12
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -42,13 +42,13 @@ String_with_capacity:
     call alloc
     mov qword [r12 + String.ptr], rax
 
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; #[systemv]
 ; fn String::reserve_exact(&mut self := rdi, (additional := rsi): usize)
-String_reserve_exact:
-    push r12
+FN String_reserve_exact
+    PUSH r12
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -87,15 +87,15 @@ String_reserve_exact:
     .end_if:
 
     .exit:
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; FIXME(hack3rmann): debug and fix
 ;
 ; #[systemv]
 ; fn String::reserve(&mut self := rdi, (additional := rsi): usize)
-String_reserve:
-    push r12
+FN String_reserve
+    PUSH r12
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -117,14 +117,13 @@ String_reserve:
     mov rsi, rax
     call String_reserve_exact
 
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; #[systemv]
 ; fn String::push_ascii(&mut self := rdi, (value := rsi): u8)
-String_push_ascii:
-    push r12
-    push r13
+FN String_push_ascii
+    PUSH r12, r13
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -173,16 +172,13 @@ String_push_ascii:
     ; self.len += 1
     inc qword [r12 + String.len]
 
-    pop r13
-    pop r12
-    ret
+    POP r13, r12
+END_FN
 
 ; #[systemv]
 ; fn String::push_str(&mut self := rdi, Str { len := rsi, ptr := rdx }: Str)
-String_push_str:
-    push r12
-    push r13
-    push r14
+FN String_push_str
+    PUSH r12, r13, r14
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -254,14 +250,12 @@ String_push_str:
     ; self.len += str_len
     add qword [r12 + String.len], r13
 
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP r14, r13, r12
+END_FN
 
 ; #[systemv]
 ; fn String::push_cstr(&mut self := rdi, (cstr := rsi): *mut u8)
-String_push_cstr:
+FN String_push_cstr
     ; let (len := rdx) = cstr_len(cstr)
     ; mov rsi, rsi
     call cstr_len
@@ -274,21 +268,19 @@ String_push_cstr:
     mov rsi, rdx
     mov rdx, r8
     call String_push_str
-
-    ret
+END_FN
 
 ; #[fastcall]
 ; fn String::clear(&mut self := rdi)
 String_clear:
     ; self.len = 0
     mov qword [rdi + String.len], 0
-
     ret
 
 ; #[systemv]
 ; fn String::drop(&mut self := rdi)
-String_drop:
-    push r12
+FN String_drop
+    PUSH r12
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -301,27 +293,23 @@ String_drop:
     mov rdi, r12
     call String_new
 
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; #[systemv]
 ; fn String::format_i64(&mut self := rdi, (value := rsi): i64)
-String_format_i64:
-    push rbp
-    push r12
-    push r13
-    push rbx
-    mov rbp, rsp
+FN String_format_i64
+    PUSH r12, r13, rbx
 
-    .digits             equ -24
-    .n_digits           equ 24
-    .stack_size         equ ALIGNED(-.digits)
-
-    ; let (self := r12) = self
-    mov r12, rdi
+    .n_digits equ 24
+    LOCAL .digits, .n_digits
+    STACK .stack_size
 
     ; let digits: [u8; 24]
     sub rsp, .stack_size
+
+    ; let (self := r12) = self
+    mov r12, rdi
 
     ; digits[-1] = b'0'
     mov byte [rbp+.digits+.n_digits-1], "0"
@@ -403,23 +391,17 @@ String_format_i64:
 
     add rsp, .stack_size
 
-    pop rbx
-    pop r13
-    pop r12
-    pop rbp
-    ret
+    POP rbx, r13, r12
+END_FN
 
 ; #[systemv]
 ; fn String::format_u64(&mut self := rdi, (value := rsi): u64)
-String_format_u64:
-    push rbp
-    push r12
-    push r13
-    mov rbp, rsp
+FN String_format_u64
+    PUSH r12, r13
 
-    .digits             equ -24
-    .n_digits           equ 24
-    .stack_size         equ ALIGNED(-.digits)
+    .n_digits equ 24
+    LOCAL .digits, .n_digits
+    STACK .stack_size
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -479,7 +461,5 @@ String_format_u64:
 
     add rsp, .stack_size
 
-    pop r13
-    pop r12
-    pop rbp
-    ret
+    POP r13, r12
+END_FN

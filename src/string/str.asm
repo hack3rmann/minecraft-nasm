@@ -1,11 +1,12 @@
 %include "../string.s"
 %include "../debug.s"
+%include "../function.s"
 
 section .text
 
 ; #[systemv]
 ; fn Str::eq((lhs := rdi:rsi): Str, (rhs := rdx:rcx): Str) -> bool := al
-Str_eq:
+FN Str_eq
     ; let (result := al) = false
     xor al, al
 
@@ -40,4 +41,4 @@ Str_eq:
     mov al, 1
     
     .exit:
-    ret
+END_FN

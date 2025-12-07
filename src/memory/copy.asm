@@ -1,10 +1,11 @@
 %include "../memory.s"
+%include "../function.s"
 
 section .text
 
 ; #[fastcall(rdi, rsi, rdx, al)]
 ; fn copy((source := rdi): *mut u8, (dest := rsi): *mut u8, (size := rdx): usize)
-copy:
+FN copy
     ; while (size as isize) >= 0 {
     .while:
     cmp rdx, 0
@@ -26,5 +27,4 @@ copy:
     ; }
     jmp .while
     .end_while:
-
-    ret
+END_FN

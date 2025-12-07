@@ -2,12 +2,13 @@
 %include "../syscall.s"
 %include "../error.s"
 %include "../debug.s"
+%include "../function.s"
 
 section .text
 
 ; #[systemv]
 ; unsafe fn alloc((size := rdi): usize) -> *mut () := rax
-alloc:
+FN alloc
     ; let (size := rsi) = size
     mov rsi, rdi
 
@@ -45,11 +46,11 @@ alloc:
 
     ; return result
     .exit:
-    ret
+END_FN
 
 ; #[systemv]
 ; unsafe fn dealloc((ptr := rdi): *mut ())
-dealloc:
+FN dealloc
     ; if ptr == null { return }
     test rdi, rdi
     jz .exit
@@ -72,14 +73,12 @@ dealloc:
     call abort
 
     .exit:
-    ret
+END_FN
 
 ; #[systemv]
 ; unsafe fn realloc((ptr := rdi): *mut (), (size := rsi): usize) -> *mut () := rax
-realloc:
-    push r12
-    push r13
-    push r14
+FN realloc
+    PUSH r12, r13, r14
 
     ; let (ptr := r12) = ptr
     mov r12, rdi
@@ -129,7 +128,5 @@ realloc:
     mov rax, r14
 
     .exit:
-    pop r14
-    pop r13
-    pop r12
-    ret
+    POP r14, r13, r12
+END_FN

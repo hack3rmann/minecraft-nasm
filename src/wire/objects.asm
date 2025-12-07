@@ -2,6 +2,7 @@
 %include "../string.s"
 %include "../wire.s"
 %include "../debug.s"
+%include "../function.s"
 
 struc WlObjectNameMap
     .type           resb 1
@@ -108,7 +109,7 @@ section .text
 
 ; #[systemv]
 ; fn wire_init()
-wire_init:
+FN wire_init
     ; for i in 0..WIRE_MAX_N_OBJECTS {
     %assign i 0
     %rep WIRE_MAX_N_OBJECTS
@@ -144,12 +145,11 @@ wire_init:
     mov rsi, wire_event.display_delete_id_opcode
     mov rdx, wire_handle_delete_id
     call wire_set_dispatcher
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn wire_deinit()
-wire_deinit:
+FN wire_deinit
     ; for i in 0..WIRE_MAX_N_OBJECTS {
     %assign i 0
     %rep WIRE_MAX_N_OBJECTS
@@ -161,11 +161,10 @@ wire_deinit:
     ; }
     %assign i i+1
     %endrep
-
-    ret
+END_FN
 
 ; fn RegistryGlobal::new(($ret := rdi): *mut Self) -> Self
-RegistryGlobal_new:
+FN RegistryGlobal_new
     ; $ret->name = 0
     mov dword [rdi + RegistryGlobal.name], 0
 
@@ -175,12 +174,11 @@ RegistryGlobal_new:
     ; $ret->interface = String::new()
     lea rdi, [rdi + RegistryGlobal.interface]
     call String_new
-
-    ret
+END_FN
 
 ; fn RegistryGlobal::drop(&mut self := rdi)
-RegistryGlobal_drop:
-    push r12
+FN RegistryGlobal_drop
+    PUSH r12
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -193,13 +191,12 @@ RegistryGlobal_drop:
     mov rdi, r12
     call RegistryGlobal_new
 
-    pop r12
-    ret
+    POP r12
+END_FN
 
 ; fn WlObjectType::from_str((src := rdi:rsi): Str) -> WlObjectType := al
-WlObjectType_from_str:
-    push r12
-    push r13
+FN WlObjectType_from_str
+    PUSH r12, r13
 
     ; let (src := r12:r13) = src
     mov r12, rdi
@@ -232,6 +229,5 @@ WlObjectType_from_str:
     mov al, WL_OBJECT_TYPE_INVALID
 
     .exit:
-    pop r13
-    pop r12
-    ret
+    POP r13, r12
+END_FN

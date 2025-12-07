@@ -1,11 +1,11 @@
 %include "../memory.s"
-%include "../debug.s"
+%include "../function.s"
 
 section .text
 
 ; #[systemv]
 ; fn set8((ptr := rdi): *mut u8, (value := sil): u8, (count := rdx): usize)
-set8:
+FN set8
     ; let (value := al) = value as u8
     mov al, sil
 
@@ -26,12 +26,11 @@ set8:
     ; }
     jmp .while
     .end_while:
-
-    ret
+END_FN
 
 ; #[systemv]
 ; fn set32((ptr := rdi): *mut u32, (value := esi): u32, (count := rdx): usize)
-set32:
+FN set32
     PUSH r12, r13, r14
 
     ; let (ptr := r12) = ptr
@@ -115,11 +114,11 @@ set32:
 
     .exit:
     POP r14, r13, r12
-    ret
+END_FN
 
 ; #[systemv]
 ; fn set256((ptr := rdi): *mut u256, (value := ymm0): u256, (count := rdx): usize)
-set256:
+FN set256
     ; let (value := eax) = value as u32
     mov eax, esi
 
@@ -140,5 +139,4 @@ set256:
     ; }
     jmp .while
     .end_while:
-
-    ret
+END_FN
