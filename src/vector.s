@@ -1,6 +1,10 @@
 %ifndef _ARITH_INC
 %define _ARITH_INC
 
+%define SHUF(x, y, z, w) ((x) | ((y) << 2) | ((z) << 4) | ((w) << 6))
+
+%define BLEND(x, y, z, w) ((x) | ((y) << 1) | ((z) << 2) | ((w) << 3))
+
 %macro VPMULL_U24F8 3
     vpmulld %1, %2, %3
     psrld %1, 8
@@ -27,7 +31,7 @@
     paddd xmm11, xmm12           ; (hi_mid_sum := xmm11) = hi_mul_hi_shl + mixed_mul_shl
     pmulld xmm15, xmm14          ; (lo_mul_lo := xmm15) = a_lo * b_lo
     psrld xmm15, 8               ; (lo_mul_lo_shr := xmm15) = lo_mul_lo >> 8
-    paddd xmm11, xmm15           ; (result := xmm11) = mixed_mul_shl + lo_mul_lo_shr
+    paddd xmm11, xmm15           ; (result := xmm11) = hi_mid_sum + lo_mul_lo_shr
     vphaddd xmm11, xmm11, xmm11
     vphaddd xmm11, xmm11, xmm11
     vmovd %1, xmm11

@@ -145,21 +145,21 @@ Image_fill_triangle:
     pslld xmm5, 8
     psubd xmm5, xmm0
     psubd xmm5, [u24f8x4_one]
-    vpblendd xmm0, xmm0, xmm5, 0b0010
+    vpblendd xmm0, xmm0, xmm5, BLEND(0, 1, 0, 0)
 
     ; b.y = self.height as u24f8 - b.y - 1
     vpbroadcastd xmm5, dword [rdi + Image.height]
     pslld xmm5, 8
     psubd xmm5, xmm1
     psubd xmm5, [u24f8x4_one]
-    vpblendd xmm1, xmm1, xmm5, 0b0010
+    vpblendd xmm1, xmm1, xmm5, BLEND(0, 1, 0, 0)
 
     ; c.y = self.height as u24f8 - c.y - 1
     vpbroadcastd xmm5, dword [rdi + Image.height]
     pslld xmm5, 8
     psubd xmm5, xmm2
     psubd xmm5, [u24f8x4_one]
-    vpblendd xmm2, xmm2, xmm5, 0b0010
+    vpblendd xmm2, xmm2, xmm5, BLEND(0, 1, 0, 0)
 
     ; let (min := xmm3) = min(a, b, c) as u32x4
     vpminud xmm3, xmm0, xmm1
@@ -421,10 +421,17 @@ Image_draw_line:
 ;     (to := xmm1): i24f8x4,
 ; )
 Image_draw_line_better:
-    PUSH r12, r13
+    PUSH r12, r13, r14
 
     ; let (delta := xmm2) = to - from
     vpsubd xmm2, xmm1, xmm0
+
+    ; let (sign_x := r14d) = delta.x.sign()
+    pextrd r14d, xmm2, 0
+    sar r14d, 31 ; r14d = (-1|0)
+    shl r14d, 1  ; r14d = (-2|0)
+    inc r14d     ; r14d = (-1|1)
+    shl r14d, 8  ; r14d = (-256|256)
 
     ; let (abs_dir := xmm3) = dir.abs()
     pabsd xmm3, xmm2
@@ -444,10 +451,10 @@ Image_draw_line_better:
     cmovge r13d, r9d
 
     ; let (normal := xmm2) = i24f8x4::new(-delta.y, delta.x, ..delta)
-    pshufd xmm2, xmm2, 0b11100001     ; (x, y, z, w) |-> (y, x, z, w)
+    pshufd xmm2, xmm2, SHUF(1, 0, 2, 3)    ; (x, y, z, w) |-> (y, x, z, w)
     pxor xmm3, xmm3
-    vpsubd xmm3, xmm3, xmm2           ; xmm3 = -(y, x, z, w)
-    vpblendd xmm2, xmm3, 0b0001       ; xmm2 = (xmm3.x, ..xmm2)
+    vpsubd xmm3, xmm3, xmm2                ; xmm3 = -(y, x, z, w)
+    vpblendd xmm2, xmm3, BLEND(1, 0, 0, 0) ; xmm2 = (xmm3.x, ..xmm2)
 
     ; let (current := xmm3) = from
     vmovaps xmm3, xmm0
@@ -476,6 +483,11 @@ Image_draw_line_better:
         DOT_I24F8X4 eax, xmm3, xmm2
         sub eax, r12d
 
+        ; distance *= sign_x
+        mov edx, r14d
+        sar edx, 8
+        imul eax, edx
+
         ; let (y_increment := eax) = if distance <= 0 { 1 } else { 0 }
         cmp eax, 0
         setle al
@@ -487,10 +499,9 @@ Image_draw_line_better:
         pinsrd xmm4, eax, 1
         paddd xmm3, xmm4
 
-        ; current.x += 1
-        mov eax, U24F8(1, 0)
+        ; current.x += sign_x
         pxor xmm4, xmm4
-        pinsrd xmm4, eax, 0
+        pinsrd xmm4, r14d, 0
         paddd xmm3, xmm4
 
         ; n_steps -= 1
@@ -512,7 +523,7 @@ Image_draw_line_better:
     mov rdx, r8
     call Image_set_pixel
 
-    POP r13, r12
+    POP r14, r13, r12
     ret
 
 ; #[systemv]

@@ -51,7 +51,7 @@ section .data
 
     align XMM_ALIGN
     line_from dd U24F8(100, 42),  U24F8(100, 69), 0, 0
-    line_to   dd U24F8(1000, 127), U24F8(400, 200), 0, 0
+    line_to   dd U24F8(600, 127), U24F8(400, 200), 0, 0
 
 section .bss
     ; static display_fd: usize
@@ -94,20 +94,20 @@ main:
         mov esi, CLEAR_COLOR
         call Image_fill
 
-        ; screen_image.fill_rect(RGB(..), (100, 379), (100, 100))
-        mov rdi, screen_image
-        mov esi, RGB(0, 0xFF, 0xFF)
-        mov rdx, PAIR32(100, 379)
-        mov rcx, PAIR32(201, 101)
-        call Image_fill_rect
+        ; ; screen_image.fill_rect(RGB(..), (100, 379), (100, 100))
+        ; mov rdi, screen_image
+        ; mov esi, RGB(0, 0xFF, 0xFF)
+        ; mov rdx, PAIR32(100, 379)
+        ; mov rcx, PAIR32(201, 101)
+        ; call Image_fill_rect
 
-        ; screen_image.fill_triangle(RGB(..), a, b, c)
-        mov rdi, screen_image
-        mov esi, RGB(0xFF, 0xFF, 0)
-        vmovaps xmm0, [a]
-        vmovaps xmm1, [b]
-        vmovaps xmm2, [c]
-        call Image_fill_triangle
+        ; ; screen_image.fill_triangle(RGB(..), a, b, c)
+        ; mov rdi, screen_image
+        ; mov esi, RGB(0xFF, 0xFF, 0)
+        ; vmovaps xmm0, [a]
+        ; vmovaps xmm1, [b]
+        ; vmovaps xmm2, [c]
+        ; call Image_fill_triangle
 
         ; screen_image.draw_line_better(RGB(..), line_from, line_to)
         mov rdi, screen_image
