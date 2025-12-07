@@ -8,6 +8,7 @@
 %include "wire.s"
 %include "shm.s"
 %include "image.s"
+%include "vector.s"
 
 %define CLEAR_COLOR RGB(0xF, 0xF, 0xF)
 ; %define BENCHMARK
@@ -51,7 +52,7 @@ section .data
 
     align XMM_ALIGN
     line_from dd U24F8(100, 42),  U24F8(100, 69), 0, 0
-    line_to   dd U24F8(600, 127), U24F8(400, 200), 0, 0
+    line_to   dd U24F8(1200, 127), U24F8(1000, 200), 0, 0
 
 section .bss
     ; static display_fd: usize
@@ -94,27 +95,12 @@ main:
         mov esi, CLEAR_COLOR
         call Image_fill
 
-        ; ; screen_image.fill_rect(RGB(..), (100, 379), (100, 100))
-        ; mov rdi, screen_image
-        ; mov esi, RGB(0, 0xFF, 0xFF)
-        ; mov rdx, PAIR32(100, 379)
-        ; mov rcx, PAIR32(201, 101)
-        ; call Image_fill_rect
-
-        ; ; screen_image.fill_triangle(RGB(..), a, b, c)
-        ; mov rdi, screen_image
-        ; mov esi, RGB(0xFF, 0xFF, 0)
-        ; vmovaps xmm0, [a]
-        ; vmovaps xmm1, [b]
-        ; vmovaps xmm2, [c]
-        ; call Image_fill_triangle
-
-        ; screen_image.draw_line_better(RGB(..), line_from, line_to)
+        ; screen_image.draw_line(RGB(..), line_from, line_to)
         mov rdi, screen_image
         mov esi, RGB(0xFF, 0, 0xFF)
         vmovaps xmm0, [line_from]
         vmovaps xmm1, [line_to]
-        call Image_draw_line_better
+        call Image_draw_line
 
         ; update_surface()
         call update_surface
@@ -126,8 +112,6 @@ main:
         ; line_from += 16 * u24f8::ONE
         add dword [line_from], U24F8(0, 64)
         add dword [line_from + 4], U24F8(0, 4)
-
-        ; sub dword [line_to + 4], U24F8(0, 64)
 
         ; iteration += 1
         inc qword [iteration]
