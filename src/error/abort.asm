@@ -24,8 +24,9 @@ abort:
     mov rdi, EXIT_FAILURE
     syscall
 
-    ; // do return just in case
-    ret
+    ; // loop forever just in case
+    .loop:
+    jmp .loop
 
 ; #[fastcall]
 ; fn exit_on_error((code := rax): usize)
