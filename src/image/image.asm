@@ -421,10 +421,49 @@ Image_draw_line:
 ;     (to := xmm1): i24f8x4,
 ; )
 Image_draw_line_better:
-    PUSH r12, r13, r14
+    PUSH r12, r13, r14, r15, rbx
 
     ; let (delta := xmm2) = to - from
     vpsubd xmm2, xmm1, xmm0
+
+    ; let (abs_dir := xmm3) = dir.abs()
+    pabsd xmm3, xmm2
+
+    ; let (perm_shift := r15b) = if abs_dir.y < abs_dir.x {
+    pextrd edx, xmm3, 0
+    pextrd eax, xmm3, 1
+    cmp eax, edx
+    jge .else_abs_dir
+
+        ; perm_shift = 0
+        xor r15b, r15b
+
+    ; } else {
+    jmp .end_if_abs_dir
+    .else_abs_dir:
+
+        ; mem::swap(&mut from.x, &mut from.y)
+        pshufd xmm0, xmm0, SHUF(1, 0, 2, 3)
+
+        ; mem::swap(&mut to.x, &mut to.y)
+        pshufd xmm1, xmm1, SHUF(1, 0, 2, 3)
+
+        ; mem::swap(&mut delta.x, &mut delta.y)
+        pshufd xmm2, xmm2, SHUF(1, 0, 2, 3)
+
+        ; mem::swap(&mut abs_dir.x, &mut abs_dir.y)
+        pshufd xmm3, xmm3, SHUF(1, 0, 2, 3)
+
+        ; perm_shift = 32
+        mov r15b, 32
+
+    ; }
+    .end_if_abs_dir:
+
+    ; let (n_steps := r13d) = abs_dir.x.round_up() as u32
+    pextrd r13d, xmm3, 0
+    add r13d, U24F8(0, 255)
+    shr r13d, 8
 
     ; let (sign_x := r14d) = delta.x.sign()
     pextrd r14d, xmm2, 0
@@ -433,22 +472,12 @@ Image_draw_line_better:
     inc r14d     ; r14d = (-1|1)
     shl r14d, 8  ; r14d = (-256|256)
 
-    ; let (abs_dir := xmm3) = dir.abs()
-    pabsd xmm3, xmm2
-
-    ; let (n_steps := r13d) = if abs_dir.y < abs_dir.x {
-    ;     abs_dir.x.round_up() as u32
-    ; } else { abs_dir.y.round_up() as u32 }
-    pextrd r13d, xmm3, 0
-    add r13d, U24F8(0, 255)
-    shr r13d, 8
-    pextrd r9d, xmm3, 1
-    add r9d, U24F8(0, 255)
-    shr r9d, 8
-    pextrd edx, xmm3, 0
-    pextrd eax, xmm3, 1
-    cmp eax, edx
-    cmovge r13d, r9d
+    ; let (sign_y := ebx) = delta.y.sign()
+    pextrd ebx, xmm2, 1
+    sar ebx, 31 ; ebx = (-1|0)
+    shl ebx, 1  ; ebx = (-2|0)
+    inc ebx     ; ebx = (-1|1)
+    shl ebx, 8  ; ebx = (-256|256)
 
     ; let (normal := xmm2) = i24f8x4::new(-delta.y, delta.x, ..delta)
     pshufd xmm2, xmm2, SHUF(1, 0, 2, 3)    ; (x, y, z, w) |-> (y, x, z, w)
@@ -475,6 +504,10 @@ Image_draw_line_better:
         shl rax, 32
         or r8, rax
 
+        ; if perm_shift == 32 { mem::swap(&mut x, &mut y) }
+        mov cl, r15b
+        rol r8, cl
+
         ; self.set_pixel(color, (x, y))
         mov rdx, r8
         call Image_set_pixel
@@ -483,8 +516,11 @@ Image_draw_line_better:
         DOT_I24F8X4 eax, xmm3, xmm2
         sub eax, r12d
 
-        ; distance *= sign_x
+        ; distance *= sign_x * sign_y
         mov edx, r14d
+        sar edx, 8
+        imul eax, edx
+        mov edx, ebx
         sar edx, 8
         imul eax, edx
 
@@ -493,6 +529,11 @@ Image_draw_line_better:
         setle al
         movzx eax, al
         shl eax, 8
+
+        ; y_increment *= sign_y
+        mov edx, ebx
+        shr edx, 8
+        imul eax, edx
 
         ; current.y += y_increment
         pxor xmm4, xmm4
@@ -519,11 +560,15 @@ Image_draw_line_better:
     shl rax, 32
     or r8, rax
 
+    ; if perm_shift == 32 { mem::swap(&mut x, &mut y) }
+    mov cl, r15b
+    rol r8, cl
+
     ; self.set_pixel(color, (x, y))
     mov rdx, r8
     call Image_set_pixel
 
-    POP r14, r13, r12
+    POP rbx, r15, r14, r13, r12
     ret
 
 ; #[systemv]
