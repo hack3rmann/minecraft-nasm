@@ -1,6 +1,7 @@
 %include "../syscall.s"
 %include "../error.s"
 %include "../function.s"
+%include "../debug.s"
 
 section .text
 
@@ -8,6 +9,9 @@ section .text
 ; #[jumpable]
 ; fn abort() -> !
 FN abort
+    ; stack_trace_print()
+    call stack_trace_print
+
     ; let (pid := rax) = getpid()
     mov rax, SYSCALL_GETPID
     syscall

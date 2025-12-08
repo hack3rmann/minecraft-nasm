@@ -18,10 +18,11 @@ extern String_new, String_drop, String_push_ascii, String_push_str, String_with_
 extern parse_raw_string, parse_arg_escape, parse_arg_string, parse_arg_type
 
 struc Str
-    .len      resq 1
-    .ptr      resq 1
-    .sizeof   equ $-.len
-    .alignof  equ 8
+    .len          resq 1
+    .ptr          resq 1
+    .sizeof       equ $-.len
+    .sizeof_log2  equ 4
+    .alignof      equ 8
 endstruc
 
 extern Str_eq

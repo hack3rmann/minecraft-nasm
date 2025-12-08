@@ -10,6 +10,7 @@
 %include "image.s"
 %include "vector.s"
 %include "function.s"
+%include "start.s"
 
 %define CLEAR_COLOR RGB(0xF, 0xF, 0xF)
 ; %define BENCHMARK

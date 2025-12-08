@@ -67,10 +67,9 @@ FN dealloc
     ; mov rsi, rsi
     syscall
 
-    ; if result != 0 { abort() }
+    ; assert result == 0
     test rax, rax
-    jz .exit
-    call abort
+    jnz abort
 
     .exit:
 END_FN

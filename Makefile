@@ -3,7 +3,7 @@ SRC = $(shell pwd)/src
 EXEC_NAME = minecraft
 
 NASM = nasm
-NASM_FLAGS = --gprefix _ -f elf64
+NASM_FLAGS = --gprefix _ -f elf64 -DDEBUG
 NASM_FLAGS_DEBUG = -F dwarf -g
 NASM_FLAGS_RELEASE = -O3
 LD = ld

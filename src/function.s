@@ -2,6 +2,7 @@
 %define _FUNCTION_INC
 
 %define N_PUSHAS 16
+%define MAX_TRACE_LEN 256
 
 ; PUSH <REGISTERS>,*
 %macro PUSH 0-*
@@ -42,18 +43,55 @@
 ;     ...
 ; END_FN
 %macro FN 1
-%1:
-    push rbp
-    mov rbp, rsp
+    %ifdef DEBUG
+        %push
+        %push
+        %push
 
-    %assign .push_size 0
-    %assign .local_size 0
+        %defstr %$FN_NAME %1
+
+        section .rodata
+            %$fn_name.ptr db %$FN_NAME
+            %$fn_name.len equ $-%$fn_name.ptr
+    %endif
+
+    section .text
+    %1:
+        push rbp
+        mov rbp, rsp
+
+        %ifdef DEBUG
+            push rax
+            push rdi
+            push rsi
+
+            mov rdi, %$fn_name.len
+            mov rsi, %$fn_name.ptr
+            call stack_trace_push_fn
+
+            pop rsi
+            pop rdi
+            pop rax
+        %endif
+
+        %assign .push_size 0
+        %assign .local_size 0
+
+    %ifdef DEBUG
+        %pop
+        %pop
+        %pop
+    %endif
 %endmacro
 
 ; FN <NAME>
 ;     ...
 ; END_FN
 %macro END_FN 0
+%ifdef DEBUG
+    call stack_trace_pop_fn
+%endif
+
     mov rsp, rbp
     pop rbp
     ret
@@ -61,14 +99,16 @@
 
 ; LOCAL <NAME> <SIZE>
 %macro LOCAL 2
-    %1 equ -%2 - .local_size - .push_size
+    %1 equ -(%2) - .local_size - .push_size
 
-    %assign .local_size .local_size+%2
+    %assign .local_size .local_size+(%2)
 %endmacro
 
 ; STACK <SIZE_NAME>
 %macro STACK 1
     %1 equ ALIGNED(.local_size)
 %endmacro
+
+extern stack_trace_push_fn, stack_trace_pop_fn, stack_trace_print
 
 %endif ; !_FUNCTION_INC
