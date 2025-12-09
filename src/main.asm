@@ -107,8 +107,16 @@ FN test_unwind
     mov rdx, wl_compositor_str.ptr
     call String_push_str
 
-    ; assert drop_another_string.next_offset == 0
-    cmp qword [rbp + .drop_another_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], 0
+    ; assert uninit_format.next_offset == 0
+    cmp qword [rbp + .uninit_format + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], 0
+    jne abort
+
+    ; assert drop_test_string.next_offset == offsetof(uninit_format)
+    cmp qword [rbp + .drop_test_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], .uninit_format
+    jne abort
+
+    ; assert drop_another_string.next_offset == offsetof(drop_test_string)
+    cmp qword [rbp + .drop_another_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], .drop_test_string
     jne abort
 
     ; assert drop_test_string.drop_and_flags == String::drop

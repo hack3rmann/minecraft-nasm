@@ -167,10 +167,16 @@
 %macro UNWIND_PTR 1
     %1 equ -24 - .local_size - .push_size - .unwind_size
 
-    mov qword [rbp + .unwind_offset], %1
+    
+    %if .unwind_offset == FN_UNWIND_INFO_OFFSET
+        mov qword [rbp + %1 + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], 0
+    %else
+        mov qword [rbp + %1 + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], .unwind_offset
+    %endif
+
+    mov qword [rbp + FN_UNWIND_INFO_OFFSET + UnwindHeader.offset], %1
     %assign .unwind_offset %1
 
-    mov qword [rbp + %1 + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], 0
     mov qword [rbp + %1 + UnwindInfoSinglePtr.header + UnwindInfoHeader.drop_and_flags], 0
     mov qword [rbp + %1 + UnwindInfoSinglePtr.value_offset], 0
 
