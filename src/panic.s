@@ -10,8 +10,7 @@ struc UnwindHeader
     .sizeof             equ $-.offset
 endstruc
 
-; const UnwindHeader::EMPTY = UnwindHeader { next_offset: 0 }
-%define UnwindHeader_EMPTY 0
+%define UNWIND_OFFSET_END   0xFFFFFFFFFFFFFFFF
 
 struc UnwindInfoHeader
     ; next_offset: usize
@@ -39,6 +38,6 @@ endstruc
     %define UnwindInfoFlags_NOT_INPLACE 0x1
 ; }
 
-extern panic_call_deferred
+extern panic_drop_frame, panic_start_unwind, panic
 
 %endif ; !_PANIC_INC

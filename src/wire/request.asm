@@ -5,6 +5,7 @@
 %include "../memory.s"
 %include "../debug.s"
 %include "../function.s"
+%include "../panic.s"
 
 section .text
 
@@ -37,7 +38,7 @@ wire_get_next_id:
 
     ; assert wire_last_id < WIRE_MAX_N_OBJECTS
     cmp rax, WIRE_MAX_N_OBJECTS
-    jae abort
+    jae panic
 
     ; return wire_last_id
 
@@ -193,7 +194,7 @@ FN wire_flush
 
         ; assert n_bytes == wire_message_buffer_len
         cmp rax, qword [wire_message_buffer_len]
-        jne abort
+        jne panic
 
     ; } else {
     jmp .end_if

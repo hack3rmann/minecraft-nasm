@@ -1,13 +1,14 @@
 %include "../panic.s"
 %include "../function.s"
 %include "../debug.s"
+%include "../error.s"
 
 section .text
 
 ; #[systemv]
 ; #[nounwind]
-; fn panic_call_deferred((frame_ptr := rbp): *mut anytype)
-panic_call_deferred:
+; fn panic_drop_frame((frame_ptr := rbp): *mut anytype)
+panic_drop_frame:
     push r12
     push r13
 
@@ -59,4 +60,44 @@ panic_call_deferred:
     .exit:
     pop r13
     pop r12
+    ret
+
+; #[systemv]
+; #[nounwind]
+; fn panic_start_unwind((mut frame_ptr := rbp): *mut anytype)
+panic_start_unwind:
+    push rbp
+
+    ; while (frame_ptr + FN_UNWIND_INFO_OFFSET).cast::<UnwindHeader>().offset
+    ;     != UNWIND_OFFSET_END
+    ; {
+    .while:
+    cmp qword [rbp + FN_UNWIND_INFO_OFFSET + UnwindHeader.offset], UNWIND_OFFSET_END
+    je .end_while
+
+        ; panic_drop_frame(frame_ptr)
+        call panic_drop_frame
+
+        ; frame_ptr = *(frame_ptr + FN_SAVED_RBP_OFFSET).cast::<*mut anytype>();
+        mov rbp, qword [rbp + FN_SAVED_RBP_OFFSET]
+
+    ; }
+    jmp .while
+    .end_while:
+
+    pop rbp
+    ret
+
+; #[systemv]
+; #[nounwind]
+; #[jumpable]
+; #[noreturn]
+; fn panic_start_unwind((mut frame_ptr := rbp): *mut anytype) -> !
+panic:
+    ; panic_start_unwind()
+    call panic_start_unwind
+
+    ; abort()
+    call abort
+
     ret

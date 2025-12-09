@@ -3,6 +3,7 @@
 %include "../shm.s"
 %include "../error.s"
 %include "../function.s"
+%include "../panic.s"
 
 section .rodata
     dev_shm_path.ptr      db "/dev/shm/minecraft", 0
@@ -56,11 +57,11 @@ FN Shm_new
 
     ; assert $ret->ptr != MMAP_FAILED
     cmp qword [r12 + Shm.ptr], MAP_FAILED
-    je abort
+    je panic
 
     ; assert $ret->ptr != null
     cmp qword [r12 + Shm.ptr], 0
-    je abort
+    je panic
 
     ; unlink(dev_shm_path.ptr)
     mov rax, SYSCALL_UNLINK
@@ -70,7 +71,7 @@ FN Shm_new
 
     ; assert $ret->ptr % sizeof(u256) == 0
     test qword [r12 + Shm.ptr], 255
-    jnz abort
+    jnz panic
 
     ; set256($ret->ptr, 0 := ymm0, shm_size / sizeof(u256))
     mov rdi, qword [r12 + Shm.ptr]

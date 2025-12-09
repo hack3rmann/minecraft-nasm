@@ -76,89 +76,31 @@ section .bss
 
 section .text
 
-FN test_unwind
-    UNWIND_PTR .uninit_format
-
-    ; let test_string: String
-    LOCAL .test_string, String.sizeof
-    UNWIND_PTR .drop_test_string
-
-    LOCAL .another_string, String.sizeof
-    UNWIND_PTR .drop_another_string
-
+; #[systemv]
+; fn main() -> i64 := rax
+FN main
+    UNWIND_PTR .deinit_format
+    UNWIND_PTR .wire_deinit
+    UNWIND_PTR .wayland_deinit
     ALLOC_STACK
 
     ; init_format()
     call init_format
 
     ; defer { deinit_format() }
-    DEFER_PTR .uninit_format, 0, deinit_format
-
-    ; test_string = String::new()
-    lea rdi, [rbp + .test_string]
-    call String_new
-
-    ; defer { drop(test_string) }
-    DEFER_PTR .drop_test_string, .test_string, String_drop
-
-    ; test_string.push_str("wl_compositor")
-    lea rdi, [rbp + .test_string]
-    mov rsi, wl_compositor_str.len
-    mov rdx, wl_compositor_str.ptr
-    call String_push_str
-
-    ; assert uninit_format.next_offset == 0
-    cmp qword [rbp + .uninit_format + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], 0
-    jne abort
-
-    ; assert drop_test_string.next_offset == offsetof(uninit_format)
-    cmp qword [rbp + .drop_test_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], .uninit_format
-    jne abort
-
-    ; assert drop_another_string.next_offset == offsetof(drop_test_string)
-    cmp qword [rbp + .drop_another_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], .drop_test_string
-    jne abort
-
-    ; assert drop_test_string.drop_and_flags == String::drop
-    cmp qword [rbp + .drop_test_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.drop_and_flags], String_drop
-    jne abort
-
-    ; assert drop_test_string.value_ptr == offsetof(test_string)
-    cmp qword [rbp + .drop_test_string + UnwindInfoSinglePtr.value_offset], .test_string
-    jne abort
-
-    ; another_string = String::new()
-    lea rdi, [rbp + .another_string]
-    call String_new
-
-    ; defer { drop(another_string) }
-    DEFER_PTR .drop_another_string, .another_string, String_drop
-
-    ; another_string.push_str("wl_shm")
-    lea rdi, [rbp + .another_string]
-    mov rsi, wl_shm_str.len
-    mov rdx, wl_shm_str.ptr
-    call String_push_str
-
-    .exit:
-END_FN
-
-; #[systemv]
-; fn main() -> i64 := rax
-FN main
-    call test_unwind
-
-    xor rax, rax
-END_FN
-
-    ; init_format()
-    call init_format
+    DEFER_PTR .deinit_format, 0, deinit_format
 
     ; wire_init()
     call wire_init
 
+    ; defer { wire_deinit() }
+    DEFER_PTR .wire_deinit, 0, wire_deinit
+
     ; wayland_init()
     call wayland_init
+
+    ; defer { wayland_deinit() }
+    DEFER_PTR .wayland_deinit, 0, wayland_deinit
 
     ; while is_window_open {
     .while:
@@ -201,15 +143,6 @@ END_FN
     jmp .while
     .end_while:
 
-    ; wayland_deinit()
-    call wayland_deinit
-
-    ; wire_deinit()
-    call wire_deinit
-
-    ; deinit_format()
-    call deinit_format
-
     ; return EXIT_SUCCESS
     xor rax, rax
 END_FN
@@ -249,7 +182,7 @@ FN wayland_init
 
     ; assert socket_path.len <= addr_max_len - 2
     cmp qword [socket_path + String.len], addr_max_len - 2
-    ja abort
+    ja panic
 
     ; copy(socket_path.ptr, &addr.sun_path, socket_path.len)
     mov rdi, qword [socket_path + String.ptr]

@@ -1,6 +1,7 @@
 %include "../syscall.s"
 %include "../start.s"
 %include "../function.s"
+%include "../panic.s"
 
 section .bss
     ; pub static argc: usize
@@ -40,6 +41,9 @@ FN start
     ; │ argc              │ ← Argument count (integer)
     ; └───────────────────┘
     ; Lower addresses
+
+    ; setup_unwind()
+    mov qword [rbp + FN_UNWIND_INFO_OFFSET + UnwindHeader.offset], UNWIND_OFFSET_END
 
     ; argc = get_argc_from_stack()
     mov rax, qword [rsp + FN_STACK_OFFSET]

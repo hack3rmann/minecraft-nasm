@@ -127,7 +127,7 @@
     push rax
     push rdx
 
-    call panic_call_deferred
+    call panic_drop_frame
 
     pop rdx
     pop rax
@@ -189,6 +189,6 @@
     mov qword [rbp + %1 + UnwindInfoSinglePtr.value_offset], %2
 %endmacro
 
-extern stack_trace_push_fn, stack_trace_pop_fn, stack_trace_print, panic_call_deferred
+extern stack_trace_push_fn, stack_trace_pop_fn, stack_trace_print, panic_drop_frame
 
 %endif ; !_FUNCTION_INC

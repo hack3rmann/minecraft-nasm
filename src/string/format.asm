@@ -3,6 +3,7 @@
 %include "../syscall.s"
 %include "../error.s"
 %include "../function.s"
+%include "../panic.s"
 
 section .rodata
     arg_type_usize        db "usize"
@@ -397,7 +398,7 @@ FN String_format_array
 
             ; assert arg_type != ArgType::Invalid
             cmp al, ARGTYPE_INVALID
-            je abort
+            je panic
 
             ; let (n_args := rax) = self.format_once(arg_type, args)
             mov rdi, r12

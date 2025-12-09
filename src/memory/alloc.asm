@@ -3,6 +3,7 @@
 %include "../error.s"
 %include "../debug.s"
 %include "../function.s"
+%include "../panic.s"
 
 section .text
 
@@ -69,7 +70,7 @@ FN dealloc
 
     ; assert result == 0
     test rax, rax
-    jnz abort
+    jnz panic
 
     .exit:
 END_FN

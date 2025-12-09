@@ -2,6 +2,7 @@
 %include "../error.s"
 %include "../function.s"
 %include "../debug.s"
+%include "../panic.s"
 
 section .text
 
@@ -38,5 +39,5 @@ END_FN
 exit_on_error:
     ; if code < 0 { abort() }
     cmp rax, 0
-    jl abort
+    jl panic
     ret

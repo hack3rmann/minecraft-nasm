@@ -5,17 +5,11 @@
 %include "../function.s"
 %include "../error.s"
 
-section .rodata
-    drop_fmt.ptr  db "String::drop('{str}')", LF
-    drop_fmt.len  equ $-drop_fmt.ptr
-
 section .text
 
 ; #[systemv]
 ; fn String::new(($return := rdi): *mut Self) -> Self
 FN String_new
-    DEBUG_STR_INLINE "String::new()"
-
     ; $return->len = 0
     mov qword [rdi + String.len], 0
 
@@ -281,48 +275,8 @@ String_clear:
 FN String_drop
     PUSH r12
 
-    LOCAL .args, Str.sizeof
-    ALLOC_STACK
-
     ; let (self := r12) = self
     mov r12, rdi
-
-    ; if self != &format_buffer {
-    cmp r12, format_buffer
-    je .else
-
-        ; args = self.as_str()
-        mov rax, qword [r12 + String.len]
-        mov qword [rbp + .args + Str.len], rax
-        mov rax, qword [r12 + String.ptr]
-        mov qword [rbp + .args + Str.ptr], rax
-
-        ; format_buffer.clear()
-        mov rdi, format_buffer
-        call String_clear
-
-        ; format_buffer.format_array(drop_fmt, &args)
-        mov rdi, format_buffer
-        mov rsi, drop_fmt.len
-        mov rdx, drop_fmt.ptr
-        lea rcx, [rbp + .args]
-        call String_format_array
-
-        ; write(STDOUT, format_buffer.ptr, format_buffer.len)
-        mov rax, SYSCALL_WRITE
-        mov rdi, STDOUT
-        mov rsi, qword [format_buffer + String.ptr]
-        mov rdx, qword [format_buffer + String.len]
-        syscall
-
-    ; } else {
-    jmp .end_if
-    .else:
-
-        DEBUG_STR_INLINE "String::drop(&mut format_buffer)"
-
-    ; }
-    .end_if:
 
     ; dealloc(self->ptr)
     mov rdi, qword [r12 + String.ptr]

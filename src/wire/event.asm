@@ -5,6 +5,7 @@
 %include "../error.s"
 %include "../memory.s"
 %include "../function.s"
+%include "../panic.s"
 
 section .rodata
     display_error_fmt.ptr         db "wayland error: WlDisplayError {{ ", \
@@ -33,7 +34,7 @@ FN wire_read_event
 
     ; assert n_read == WireMessageHeader::HEADER_SIZE
     cmp rax, WireMessageHeader.sizeof
-    jne abort
+    jne panic
 
     ; let (body_size := rdx) = wire_message.size - WireMessageHeader::HEADER_SIZE
     movzx rdx, word [wire_message + WireMessageHeader.size]
@@ -53,7 +54,7 @@ FN wire_read_event
 
         ; assert n_read == body_size
         cmp rax, rdx
-        jne abort
+        jne panic
 
     ; }
     .end_if:
@@ -216,7 +217,7 @@ FN wire_handle_display_error
     call exit_on_error
 
     ; abort()
-    jmp abort
+    jmp panic
 END_FN
 
 ; #[systemv]

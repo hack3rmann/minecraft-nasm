@@ -3,6 +3,7 @@
 %include "../memory.s"
 %include "../error.s"
 %include "../vector.s"
+%include "../panic.s"
 
 section .rodata
     align XMM_ALIGN
@@ -60,12 +61,12 @@ FN Image_slice
     shr r9, 32
     add r8, r9
     cmp r8d, dword [r13 + Image.width]
-    ja abort
+    ja panic
 
     ; assert height + y <= self.height
     lea r8d, [r14d + ecx]
     cmp r8d, dword [r13 + Image.height]
-    ja abort
+    ja panic
 
     ; ($ret->width, $ret->height) = (width, height)
     rol rcx, 32
@@ -192,11 +193,11 @@ FN Image_set_pixel
     mov rax, r8
     shr rax, 32
     cmp eax, dword [rdi + Image.width]
-    jae abort
+    jae panic
 
     ; assert y < self.height
     cmp r8d, dword [rdi + Image.height]
-    jae abort
+    jae panic
 
     ; let (index := rax) = x + self.width * y
     mov eax, dword [rdi + Image.width]
