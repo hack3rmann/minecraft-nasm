@@ -78,8 +78,11 @@ section .text
 
 FN test_unwind
     ; let test_string: String
-    LOCAL .test_string, String.sizeof
     UNWIND_PTR .drop_test_string
+    LOCAL .test_string, String.sizeof
+
+    LOCAL .another_string, String.sizeof
+    UNWIND_PTR .drop_another_string
 
     ALLOC_STACK
 
@@ -87,20 +90,41 @@ FN test_unwind
     lea rdi, [rbp + .test_string]
     call String_new
 
+    ; test_string.push_str("wl_compositor")
+    lea rdi, [rbp + .test_string]
+    mov rsi, wl_compositor_str.len
+    mov rdx, wl_compositor_str.ptr
+    call String_push_str
+
     ; defer { drop(test_string) }
     DEFER_PTR .drop_test_string, .test_string, String_drop
 
-    ; assert drop_test_string.next_offset == 0
-    cmp qword [rbp + .drop_test_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], 0
+    ; assert drop_another_string.next_offset == 0
+    cmp qword [rbp + .drop_another_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], 0
     jne abort
 
     ; assert drop_test_string.drop_and_flags == String::drop
-    cmp qword [rbp + .drop_test_string + UnwindInfoHeader.drop_and_flags], String_drop
+    cmp qword [rbp + .drop_test_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.drop_and_flags], String_drop
     jne abort
 
     ; assert drop_test_string.value_ptr == offsetof(test_string)
     cmp qword [rbp + .drop_test_string + UnwindInfoSinglePtr.value_offset], .test_string
     jne abort
+
+    ; another_string = String::new()
+    lea rdi, [rbp + .another_string]
+    call String_new
+
+    ; another_string.push_str("wl_compositor")
+    lea rdi, [rbp + .another_string]
+    mov rsi, wl_shm_str.len
+    mov rdx, wl_shm_str.ptr
+    call String_push_str
+
+    ; defer { drop(another_string) }
+    DEFER_PTR .drop_another_string, .another_string, String_drop
+
+    .exit:
 END_FN
 
 ; #[systemv]

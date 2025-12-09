@@ -144,7 +144,7 @@
     ret
 %endmacro
 
-; LOCAL <NAME> <SIZE>
+; LOCAL <NAME>, <SIZE>
 %macro LOCAL 2
     %1 equ -(%2) - .local_size - .push_size - .unwind_size
 
