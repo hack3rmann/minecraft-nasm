@@ -42,16 +42,16 @@ FN start
     ; Lower addresses
 
     ; argc = get_argc_from_stack()
-    mov rax, qword [rsp + 8]
+    mov rax, qword [rsp + FN_STACK_OFFSET]
     mov qword [argc], rax
 
     ; argv = get_argv_from_stack()
-    lea rax, [rsp + 16]
+    lea rax, [rsp + 8 + FN_STACK_OFFSET]
     mov qword [argv], rax
 
     ; envp = get_envp_from_stack()
     mov rax, qword [argc]
-    lea rax, [8 * rax + 24 + rsp]
+    lea rax, [8 * rax + 16 + rsp + FN_STACK_OFFSET]
     mov qword [envp], rax
 
     ; let stack_align = rsp % 16

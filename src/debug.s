@@ -72,6 +72,35 @@
     POPA
 %endmacro
 
+; macro DEBUG_CSTR(cstr: *mut u8)
+%macro DEBUG_CSTR 1
+%push
+    PUSHA
+
+    ; if cstr == null { return }
+    mov rax, %1
+    test rax, rax
+    jz %$.exit
+
+    ; let (len := rdx) = cstr_len(cstr)
+    mov rsi, %1
+    call cstr_len
+
+    ; write(STDOUT, cstr, len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, %1
+    syscall
+
+    ; print_newline()
+    call print_newline
+
+    %$.exit:
+
+    POPA
+%push
+%endmacro
+
 %macro DEBUG_NEWLINE 0
     PUSHA
     call print_newline

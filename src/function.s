@@ -3,6 +3,7 @@
 
 %define N_PUSHAS 16
 %define MAX_TRACE_LEN 256
+%define FN_STACK_OFFSET 16
 
 ; PUSH <REGISTERS>,*
 %macro PUSH 0-*
@@ -39,11 +40,11 @@
     popf
 %endmacro
 
-; FN <NAME>
-;     ...
-; END_FN
-%macro FN 1
-    %ifdef DEBUG
+%ifdef DEBUG
+    ; FN <NAME>
+    ;     ...
+    ; END_FN
+    %macro FN 1
         %push
         %push
         %push
@@ -53,14 +54,13 @@
         section .rodata
             %$fn_name.ptr db %$FN_NAME
             %$fn_name.len equ $-%$fn_name.ptr
-    %endif
 
-    section .text
-    %1:
-        push rbp
-        mov rbp, rsp
+        section .text
+        %1:
+            ; Save frame ptr
+            push rbp
+            mov rbp, rsp
 
-        %ifdef DEBUG
             push rax
             push rdi
             push rsi
@@ -72,17 +72,35 @@
             pop rsi
             pop rdi
             pop rax
-        %endif
 
-        %assign .push_size 0
-        %assign .local_size 0
+            %assign .push_size 0
+            %assign .local_size 0
 
-    %ifdef DEBUG
+            ; Empty unwind info
+            PUSH 0
+
         %pop
         %pop
         %pop
-    %endif
-%endmacro
+    %endmacro
+%else
+    ; FN <NAME>
+    ;     ...
+    ; END_FN
+    %macro FN 1
+        section .text
+        %1:
+            ; Save frame ptr
+            push rbp
+            mov rbp, rsp
+
+            %assign .push_size 0
+            %assign .local_size 0
+
+            ; Empty unwind info
+            PUSH 0
+    %endmacro
+%endif
 
 ; FN <NAME>
 ;     ...
