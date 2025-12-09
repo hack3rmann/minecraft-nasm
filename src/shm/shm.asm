@@ -81,9 +81,7 @@ FN Shm_new
     
     ; $ret->size = shm_size
     mov qword [r12 + Shm.size], r13
-
-    POP r13, r12
-END_FN
+END_FN r13, r12
 
 ; #[systemv]
 ; fn Shm::drop(&mut self := rdi)
@@ -117,5 +115,4 @@ FN Shm_drop
     mov qword [r12 + Shm.fd], 0
 
     .exit:
-    POP r12
-END_FN
+END_FN r12

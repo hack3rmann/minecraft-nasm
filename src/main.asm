@@ -9,6 +9,7 @@
 %include "shm.s"
 %include "image.s"
 %include "vector.s"
+%include "panic.s"
 %include "function.s"
 %include "start.s"
 
@@ -75,9 +76,41 @@ section .bss
 
 section .text
 
+FN test_unwind
+    ; let test_string: String
+    LOCAL .test_string, String.sizeof
+    UNWIND_PTR .drop_test_string
+
+    ALLOC_STACK
+
+    ; test_string = String::new()
+    lea rdi, [rbp + .test_string]
+    call String_new
+
+    ; defer { drop(test_string) }
+    DEFER_PTR .drop_test_string, .test_string, String_drop
+
+    ; assert drop_test_string.next_offset == 0
+    cmp qword [rbp + .drop_test_string + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], 0
+    jne abort
+
+    ; assert drop_test_string.drop_and_flags == String::drop
+    cmp qword [rbp + .drop_test_string + UnwindInfoHeader.drop_and_flags], String_drop
+    jne abort
+
+    ; assert drop_test_string.value_ptr == offsetof(test_string)
+    cmp qword [rbp + .drop_test_string + UnwindInfoSinglePtr.value_offset], .test_string
+    jne abort
+END_FN
+
 ; #[systemv]
-; fn main() -> i64
+; fn main() -> i64 := rax
 FN main
+    call test_unwind
+
+    xor rax, rax
+END_FN
+
     ; init_format()
     call init_format
 
@@ -383,15 +416,13 @@ FN handle_registry_global
         .sizeof             equ $-.name
     endstruc
 
-    LOCAL .fmt_args, GlobalFmtArgs.sizeof
-    STACK .stack_size
-
     ; let fmt_args: struct {
     ;     name: usize,
     ;     interface: Str,
     ;     version: usize,
     ; }
-    sub rsp, .stack_size
+    LOCAL .fmt_args, GlobalFmtArgs.sizeof
+    ALLOC_STACK
 
     ; fmt_args.name = wire_message.body.name
     xor rax, rax
@@ -502,11 +533,7 @@ FN handle_registry_global
 
     ; }
     .end_if_name:
-
-    add rsp, .stack_size
-
-    POP r13, r12
-END_FN
+END_FN r13, r12
 
 ; #[systemv]
 ; fn handle_buffer_release((buffer_id := rdi): u32)

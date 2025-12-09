@@ -190,9 +190,7 @@ FN RegistryGlobal_drop
     ; *self = RegistryGlobal::new()
     mov rdi, r12
     call RegistryGlobal_new
-
-    POP r12
-END_FN
+END_FN r12
 
 ; fn WlObjectType::from_str((src := rdi:rsi): Str) -> WlObjectType := al
 FN WlObjectType_from_str
@@ -229,5 +227,4 @@ FN WlObjectType_from_str
     mov al, WL_OBJECT_TYPE_INVALID
 
     .exit:
-    POP r13, r12
-END_FN
+END_FN r13, r12

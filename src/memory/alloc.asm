@@ -127,5 +127,4 @@ FN realloc
     mov rax, r14
 
     .exit:
-    POP r14, r13, r12
-END_FN
+END_FN r14, r13, r12

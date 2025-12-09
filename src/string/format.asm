@@ -87,8 +87,7 @@ FN parse_arg_type
     mov al, ARGTYPE_INVALID
 
     .exit:
-    POP r13, r12
-END_FN
+END_FN r13, r12
 
 ; /// Parses until first `({|})`
 ; #[systemv]
@@ -301,8 +300,7 @@ FN String_format_once
     xor rax, rax
 
     .exit:
-    POP r14, r13, r12
-END_FN
+END_FN r14, r13, r12
 
 ; #[systemv]
 ; fn String::format_array(
@@ -427,5 +425,4 @@ FN String_format_array
     .end_while:
 
     .exit:
-    POP rbx, r15, r14, r13, r12
-END_FN
+END_FN rbx, r15, r14, r13, r12

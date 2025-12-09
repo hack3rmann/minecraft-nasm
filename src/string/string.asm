@@ -1,13 +1,20 @@
+%include "../syscall.s"
 %include "../string.s"
 %include "../memory.s"
 %include "../debug.s"
 %include "../function.s"
+%include "../error.s"
+
+section .data
+    count dq 0
 
 section .text
 
 ; #[systemv]
 ; fn String::new(($return := rdi): *mut Self) -> Self
 FN String_new
+    DEBUG_STR_INLINE "String::new"
+
     ; $return->len = 0
     mov qword [rdi + String.len], 0
 
@@ -41,9 +48,7 @@ FN String_with_capacity
     mov rdi, rsi
     call alloc
     mov qword [r12 + String.ptr], rax
-
-    POP r12
-END_FN
+END_FN r12
 
 ; #[systemv]
 ; fn String::reserve_exact(&mut self := rdi, (additional := rsi): usize)
@@ -87,8 +92,7 @@ FN String_reserve_exact
     .end_if:
 
     .exit:
-    POP r12
-END_FN
+END_FN r12
 
 ; FIXME(hack3rmann): debug and fix
 ;
@@ -116,9 +120,7 @@ FN String_reserve
     mov rdi, r12
     mov rsi, rax
     call String_reserve_exact
-
-    POP r12
-END_FN
+END_FN r12
 
 ; #[systemv]
 ; fn String::push_ascii(&mut self := rdi, (value := rsi): u8)
@@ -171,9 +173,7 @@ FN String_push_ascii
 
     ; self.len += 1
     inc qword [r12 + String.len]
-
-    POP r13, r12
-END_FN
+END_FN r13, r12
 
 ; #[systemv]
 ; fn String::push_str(&mut self := rdi, Str { len := rsi, ptr := rdx }: Str)
@@ -249,9 +249,7 @@ FN String_push_str
 
     ; self.len += str_len
     add qword [r12 + String.len], r13
-
-    POP r14, r13, r12
-END_FN
+END_FN r14, r13, r12
 
 ; #[systemv]
 ; fn String::push_cstr(&mut self := rdi, (cstr := rsi): *mut u8)
@@ -280,6 +278,8 @@ String_clear:
 ; #[systemv]
 ; fn String::drop(&mut self := rdi)
 FN String_drop
+    DEBUG_STR_INLINE "String::drop"
+
     PUSH r12
 
     ; let (self := r12) = self
@@ -289,12 +289,15 @@ FN String_drop
     mov rdi, qword [rdi + String.ptr]
     call dealloc
 
-    ; *self = String::new()
-    mov rdi, r12
-    call String_new
+    ; self.len = 0
+    mov qword [r12 + String.len], 0
 
-    POP r12
-END_FN
+    ; self.ptr = null
+    mov qword [r12 + String.ptr], 0
+
+    ; self.cap = 0
+    mov qword [r12 + String.cap], 0
+END_FN r12
 
 ; #[systemv]
 ; fn String::format_i64(&mut self := rdi, (value := rsi): i64)
@@ -302,11 +305,10 @@ FN String_format_i64
     PUSH r12, r13, rbx
 
     .n_digits equ 24
-    LOCAL .digits, .n_digits
-    STACK .stack_size
 
     ; let digits: [u8; 24]
-    sub rsp, .stack_size
+    LOCAL .digits, .n_digits
+    ALLOC_STACK
 
     ; let (self := r12) = self
     mov r12, rdi
@@ -388,11 +390,7 @@ FN String_format_i64
     lea rdx, [rbp + .digits + .n_digits]
     sub rdx, r13
     call String_push_str
-
-    add rsp, .stack_size
-
-    POP rbx, r13, r12
-END_FN
+END_FN rbx, r13, r12
 
 ; #[systemv]
 ; fn String::format_u64(&mut self := rdi, (value := rsi): u64)
@@ -400,14 +398,13 @@ FN String_format_u64
     PUSH r12, r13
 
     .n_digits equ 24
+
+    ; let digits: [u8; 24]
     LOCAL .digits, .n_digits
-    STACK .stack_size
+    ALLOC_STACK
 
     ; let (self := r12) = self
     mov r12, rdi
-
-    ; let digits: [u8; 24]
-    sub rsp, .stack_size
 
     ; digits[-1] = b'0'
     mov byte [rbp+.digits+.n_digits-1], "0"
@@ -458,8 +455,4 @@ FN String_format_u64
     lea rdx, [rbp + .digits + .n_digits]
     sub rdx, r13
     call String_push_str
-
-    add rsp, .stack_size
-
-    POP r13, r12
-END_FN
+END_FN r13, r12

@@ -57,9 +57,7 @@ FN wire_read_event
 
     ; }
     .end_if:
-
-    POP r12
-END_FN
+END_FN r12
 
 ; #[systemv]
 ; fn wire_dispatch_event()
@@ -89,8 +87,7 @@ FN wire_dispatch_event
     call rax
 
     .exit:
-    POP r12
-END_FN
+END_FN r12
 
 ; #[systemv]
 ; fn wire_display_roundtrip((display_fd := rdi): Fd)
@@ -136,9 +133,7 @@ FN wire_display_roundtrip
     ; }
     jmp .loop
     .end_loop:
-
-    POP r13, r12
-END_FN
+END_FN r13, r12
 
 ; #[systemv]
 ; fn wire_set_dispatcher(
@@ -166,19 +161,21 @@ END_FN
 ; #[noreturn]
 ; fn wire_handle_display_error((_display_id := rdi): u32)
 FN wire_handle_display_error
+    ; let fmt_args: struct {
     LOCAL .fmt_args, 32
+
+    ;     object_id: usize,
     .object_id      equ .fmt_args
+
+    ;     code: usize
     .code           equ .fmt_args + 8
+
+    ;     message: Str,
     .message.len    equ .fmt_args + 16
     .message.ptr    equ .fmt_args + 24
-    STACK .stack_size
 
-    ; let fmt_args: struct {
-    ;     object_id: usize,
-    ;     code: usize
-    ;     message: Str,
     ; }
-    sub rsp, .stack_size
+    ALLOC_STACK
 
     ; message.ptr = &wire_message.body.message
     mov qword [rbp + .message.ptr], \

@@ -32,9 +32,7 @@ FN Image_fill
     mov esi, r13d
     mov rdx, rax
     call set32
-
-    POP r13, r12
-END_FN
+END_FN r13, r12
 
 ; #[systemv]
 ; fn Image::slice(
@@ -87,9 +85,7 @@ FN Image_slice
     shr r8, 32
     lea r10, [r10 + 4 * r8]
     mov qword [r12 + ImageSlice.data], r10
-
-    POP r14, r13, r12
-END_FN
+END_FN r14, r13, r12
 
 ; #[systemv]
 ; fn Image::fill_rect(
@@ -102,7 +98,7 @@ FN Image_fill_rect
     PUSH r12, r13
 
     LOCAL .slice, ImageSlice.sizeof
-    STACK .stack_size
+    ALLOC_STACK
 
     ; let slice: Image
     sub rsp, .stack_size
@@ -124,11 +120,7 @@ FN Image_fill_rect
     lea rdi, [rbp + .slice]
     mov esi, r13d
     call ImageSlice_fill
-
-    add rsp, .stack_size
-
-    POP rbp, r13, r12
-END_FN
+END_FN rbp, r13, r12
 
 ; #[systemv]
 ; fn Image::fill_triangle(
@@ -374,9 +366,7 @@ FN Image_draw_line
     ; self.set_pixel(color, (x, y))
     mov rdx, r8
     call Image_set_pixel
-
-    POP rbx, r15, r14, r13, r12
-END_FN
+END_FN rbx, r15, r14, r13, r12
 
 ; #[systemv]
 ; fn ImageSlice::fill(&mut self := rdi, (color := esi): Color)
@@ -408,6 +398,4 @@ FN ImageSlice_fill
     inc r14
     jmp .for
     .end_for:
-
-    POP r14, r13, r12
-END_FN
+END_FN r14, r13, r12

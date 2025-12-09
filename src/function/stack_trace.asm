@@ -65,9 +65,7 @@ FN stack_trace_print
     LOCAL .args, 8 + Str.sizeof
     .args.index equ .args + 0
     .args.name  equ .args + 8
-    STACK .stack_size
-
-    sub rsp, .stack_size
+    ALLOC_STACK
 
     ; format_buffer.clear()
     mov rdi, format_buffer
@@ -109,8 +107,4 @@ FN stack_trace_print
     mov rsi, qword [format_buffer + String.ptr]
     mov rdx, qword [format_buffer + String.len]
     syscall
-
-    add rsp, .stack_size
-
-    POP r12
-END_FN
+END_FN r12

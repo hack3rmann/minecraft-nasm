@@ -113,8 +113,7 @@ FN set32
     .end_while_tail:
 
     .exit:
-    POP r14, r13, r12
-END_FN
+END_FN r14, r13, r12
 
 ; #[systemv]
 ; fn set256((ptr := rdi): *mut u256, (value := ymm0): u256, (count := rdx): usize)

@@ -111,6 +111,4 @@ FN get_wayland_socket_path
 
     ; }
     .display_end_if:
-
-    POP r14, r13, r12
-END_FN
+END_FN r14, r13, r12

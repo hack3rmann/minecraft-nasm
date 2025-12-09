@@ -17,9 +17,9 @@ section .text
 FN print_int
     PUSH r12, r13, rbx
 
-    .digits             equ -24
     .n_digits           equ 24
-    .stack_size         equ ALIGNED(-.digits)
+    LOCAL .digits, .n_digits
+    ALLOC_STACK
 
     ; let digits: [u8; 24]
     sub rsp, .stack_size
@@ -103,18 +103,14 @@ FN print_int
     mov rdx, r13
     syscall
     call exit_on_error
-
-    add rsp, .stack_size
-
-    POP rbx, r13, r12
-END_FN
+END_FN rbx, r13, r12
 
 ; #[systemv]
 ; fn print_uint((value := rdi): usize)
 FN print_uint
     .n_digits equ 24
     LOCAL .digits, .n_digits
-    STACK .stack_size
+    ALLOC_STACK
 
     ; let digits: [u8; 24]
     sub rsp, .stack_size
@@ -167,15 +163,13 @@ FN print_uint
     mov rdx, rcx
     syscall
     call exit_on_error
-
-    add rsp, .stack_size
 END_FN
 
 ; fn print_uint_hex((value := rdi): usize)
 FN print_uint_hex
     .n_digits equ 16
     LOCAL .digits, 24
-    STACK .stack_size
+    ALLOC_STACK
 
     ; let digits: [u8; 19] = [0; 19]
     push 0
@@ -226,8 +220,6 @@ FN print_uint_hex
     mov rdx, 19
     syscall
     call exit_on_error
-
-    add rsp, .stack_size
 END_FN
 
 ; #[systemv]
@@ -246,10 +238,7 @@ END_FN
 ; fn print_i32x4((value := xmm0): i32x4)
 FN print_i32x4
     LOCAL .values, 64
-    STACK .stack_size
-
-    ; let values: [isize; 4]
-    sub rsp, .stack_size
+    ALLOC_STACK
 
     ; for i in 0..4 {
     %assign i 0
@@ -282,6 +271,4 @@ FN print_i32x4
     mov rdx, qword [format_buffer + String.len]
     syscall
     call exit_on_error
-
-    add rsp, .stack_size
 END_FN
