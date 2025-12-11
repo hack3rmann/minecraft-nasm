@@ -127,7 +127,7 @@ FN main
         call wire_display_roundtrip
 
         ; line_from += 16 * u24f8::ONE
-        add dword [line_from], U24F8(0, 64)
+        add dword [line_from], U24F8(0, 69)
         add dword [line_from + 4], U24F8(0, 4)
 
         ; iteration += 1

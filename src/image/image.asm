@@ -298,8 +298,10 @@ FN Image_draw_line
 
         ; let ((x, y) := r8) = (current.x as u32, current.y as u32)
         pextrd eax, xmm3, 0
+        add eax, 128
         shr rax, 8
         pextrd r8d, xmm3, 1
+        add r8d, 128
         shr r8, 8
         shl rax, 32
         or r8, rax
@@ -354,8 +356,10 @@ FN Image_draw_line
 
     ; let ((x, y) := r8) = (to.x as u32, to.y as u32)
     pextrd eax, xmm1, 0
+    add eax, 128
     shr rax, 8
     pextrd r8d, xmm1, 1
+    add r8d, 128
     shr r8, 8
     shl rax, 32
     or r8, rax
