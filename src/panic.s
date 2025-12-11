@@ -34,8 +34,9 @@ endstruc
 ; #[bitflags]
 ; struct UnwindInfoFlags {
     ; // Set if the droppable IS IN the unwind info
-    %define UnwindInfoFlags_EMPTY 0x0
-    %define UnwindInfoFlags_NOT_INPLACE 0x1
+    %define UnwindInfoFlags_EMPTY   0x0
+    %define UnwindInfoFlags_INPLACE 0x1
+    %define UnwindInfoFlags_JUST_FN 0x2
 ; }
 
 extern panic_drop_frame, panic_start_unwind, panic

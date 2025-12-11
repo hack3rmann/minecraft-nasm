@@ -167,7 +167,6 @@
 %macro UNWIND_PTR 1
     %1 equ -24 - .local_size - .push_size - .unwind_size
 
-    
     %if .unwind_offset == FN_UNWIND_INFO_OFFSET
         mov qword [rbp + %1 + UnwindInfoSinglePtr.header + UnwindInfoHeader.next_offset], 0
     %else
@@ -183,10 +182,33 @@
     %assign .unwind_size .unwind_size+24
 %endmacro
 
+; UNWIND_FN <NAME>
+%macro UNWIND_FN 1
+    %1 equ -16 - .local_size - .push_size - .unwind_size
+
+    %if .unwind_offset == FN_UNWIND_INFO_OFFSET
+        mov qword [rbp + %1 + UnwindInfoHeader.next_offset], 0
+    %else
+        mov qword [rbp + %1 + UnwindInfoHeader.next_offset], .unwind_offset
+    %endif
+
+    mov qword [rbp + FN_UNWIND_INFO_OFFSET + UnwindHeader.offset], %1
+    %assign .unwind_offset %1
+
+    mov qword [rbp + %1 + UnwindInfoHeader.drop_and_flags], UnwindInfoFlags_JUST_FN
+
+    %assign .unwind_size .unwind_size+16
+%endmacro
+
 ; DEFER_PTR <UNWIND_OFFSET>, <LOCAL_OFFSET>, <DROP_FN>
 %macro DEFER_PTR 3
     mov qword [rbp + %1 + UnwindInfoSinglePtr.header + UnwindInfoHeader.drop_and_flags], %3
     mov qword [rbp + %1 + UnwindInfoSinglePtr.value_offset], %2
+%endmacro
+
+; DEFER_FN <UNWIND_OFFSET>, <FN>
+%macro DEFER_FN 2
+    or qword [rbp + %1 + UnwindInfoHeader.drop_and_flags], %2
 %endmacro
 
 extern stack_trace_push_fn, stack_trace_pop_fn, stack_trace_print, panic_drop_frame

@@ -28,14 +28,14 @@ panic_drop_frame:
 
         ; 'drop_scope: if drop_and_flags & UnwindInfoHeader::FLAGS_BITMASK == UnwindInfoFlags::EMPTY {
         test r8b, UnwindInfoHeader_FLAGS_BITMASK
-        jnz .end_if_flags
+        jnz .end_if_flags_empty
     
             ; let (drop_in_place := r8) = drop_and_flags & UnwindInfoHeader::DROP_BITMASK
             and r8, UnwindInfoHeader_DROP_BITMASK
 
             ; if drop_in_place == null { break 'drop_scope }
             test r8, r8
-            jz .end_if_flags
+            jz .end_if_flags_empty
 
             ; let (value_offset := rdi) = (frame_ptr + unwind_offset + sizeof(UnwindInfoHeader))
             ;     .cast::<UnwindInfoSinglePtr>().value_offset
@@ -48,7 +48,26 @@ panic_drop_frame:
             call r8
 
         ; }
-        .end_if_flags:
+        .end_if_flags_empty:
+
+        ; 'drop_scope: if drop_and_flags & UnwindInfoHeader::FLAGS_BITMASK == UnwindInfoFlags::JUST_FN {
+        mov r9b, r8b
+        and r9b, UnwindInfoHeader_FLAGS_BITMASK
+        cmp r9b, UnwindInfoFlags_JUST_FN
+        jnz .end_if_flags_just_fn
+    
+            ; let (drop_in_place := r8) = drop_and_flags & UnwindInfoHeader::DROP_BITMASK
+            and r8, UnwindInfoHeader_DROP_BITMASK
+
+            ; if drop_in_place == null { break 'drop_scope }
+            test r8, r8
+            jz .end_if_flags_just_fn
+
+            ; drop_in_place(value_ptr)
+            call r8
+
+        ; }
+        .end_if_flags_just_fn:
 
         ; unwind_offset = (frame_ptr + unwind_offset).cast::<UnwindInfoHeader>().next_offset
         mov r12, qword [rbp + r12 + UnwindInfoHeader.next_offset]

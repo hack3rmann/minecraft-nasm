@@ -79,28 +79,28 @@ section .text
 ; #[systemv]
 ; fn main() -> i64 := rax
 FN main
-    UNWIND_PTR .deinit_format
-    UNWIND_PTR .wire_deinit
-    UNWIND_PTR .wayland_deinit
+    UNWIND_FN .deinit_format
+    UNWIND_FN .wire_deinit
+    UNWIND_FN .wayland_deinit
     ALLOC_STACK
 
     ; init_format()
     call init_format
 
     ; defer { deinit_format() }
-    DEFER_PTR .deinit_format, 0, deinit_format
+    DEFER_FN .deinit_format, deinit_format
 
     ; wire_init()
     call wire_init
 
     ; defer { wire_deinit() }
-    DEFER_PTR .wire_deinit, 0, wire_deinit
+    DEFER_FN .wire_deinit, wire_deinit
 
     ; wayland_init()
     call wayland_init
 
     ; defer { wayland_deinit() }
-    DEFER_PTR .wayland_deinit, 0, wayland_deinit
+    DEFER_FN .wayland_deinit, wayland_deinit
 
     ; while is_window_open {
     .while:
