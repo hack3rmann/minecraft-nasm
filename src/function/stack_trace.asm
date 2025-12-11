@@ -6,10 +6,8 @@
 %include "../error.s"
 
 section .rodata
-    trace_msg.ptr   db "Stack trace:"
-    trace_msg.len   equ $-trace_msg.ptr
-    trace_fmt.ptr   db "  {usize}: {str}", LF
-    trace_fmt.len   equ $-trace_fmt.ptr
+    STR trace_msg, "Stack trace:"
+    STR trace_fmt, "  {usize}: {str}", LF
 
 section .bss
     ; static stack_trace: [Str; MAX_TRACE_LEN]

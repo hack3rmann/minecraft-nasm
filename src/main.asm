@@ -17,17 +17,10 @@
 ; %define BENCHMARK
 
 section .rodata
-    minecraft_str.ptr     db "Minecraft"
-    minecraft_str.len     equ $-minecraft_str.ptr
-
-    wl_compositor_str.ptr db "wl_compositor"
-    wl_compositor_str.len equ $-wl_compositor_str.ptr
-
-    wl_shm_str.ptr        db "wl_shm"
-    wl_shm_str.len        equ $-wl_shm_str.ptr
-
-    xdg_wm_base_str.ptr   db "xdg_wm_base"
-    xdg_wm_base_str.len   equ $-xdg_wm_base_str.ptr
+    STR minecraft_str, "Minecraft"
+    STR wl_compositor_str, "wl_compositor"
+    STR wl_shm_str, "wl_shm"
+    STR xdg_wm_base_str, "xdg_wm_base"
 
     initial_window_width  equ 2520
     initial_window_height equ 1680

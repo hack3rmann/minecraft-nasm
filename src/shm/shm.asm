@@ -4,10 +4,10 @@
 %include "../error.s"
 %include "../function.s"
 %include "../panic.s"
+%include "../string.s"
 
 section .rodata
-    dev_shm_path.ptr      db "/dev/shm/minecraft", 0
-    dev_shm_path.len      equ $-dev_shm_path.ptr-1
+    CSTR dev_shm_path, "/dev/shm/minecraft"
 
 section .text
 

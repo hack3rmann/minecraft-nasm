@@ -6,15 +6,10 @@
 %include "../function.s"
 
 section .rodata
-    xdg_runtime_dir_str           db "XDG_RUNTIME_DIR"
-    xdg_runtime_dir_str.len       equ $-xdg_runtime_dir_str
-    wayland_display_str           db "WAYLAND_DISPLAY"
-    wayland_display_str.len       equ $-wayland_display_str
-
-    xdg_runtime_dir_default_prefix      db "/run/user/"
-    xdg_runtime_dir_default_prefix.len  equ $-xdg_runtime_dir_default_prefix
-    wayland_display_default             db "wayland-0"
-    wayland_display_default.len         equ $-wayland_display_default
+    STR xdg_runtime_dir_str, "XDG_RUNTIME_DIR"
+    STR wayland_display_str, "WAYLAND_DISPLAY"
+    STR xdg_runtime_dir_default_prefix, "/run/user/"
+    STR wayland_display_default, "wayland-0"
 
 section .text
 
@@ -31,7 +26,7 @@ FN get_wayland_socket_path
     call String_new
 
     ; let (runtime_dir := r13) = get_env("XDG_RUNTIME_DIR", .len)
-    mov rdi, xdg_runtime_dir_str
+    mov rdi, xdg_runtime_dir_str.ptr
     mov rdx, xdg_runtime_dir_str.len
     call get_env
     mov r13, rsi
@@ -58,7 +53,7 @@ FN get_wayland_socket_path
         ; $ret.push_str(xdg_runtime_dir_default_prefix)
         mov rdi, r12
         mov rsi, xdg_runtime_dir_default_prefix.len
-        mov rdx, xdg_runtime_dir_default_prefix
+        mov rdx, xdg_runtime_dir_default_prefix.ptr
         call String_push_str
 
         ; let (uid := rax) = getuid()
@@ -79,7 +74,7 @@ FN get_wayland_socket_path
     call String_push_ascii
 
     ; let (wayland_display := r13) = get_env("WAYLAND_DISPLAY", .len)
-    mov rdi, wayland_display_str
+    mov rdi, wayland_display_str.ptr
     mov rdx, wayland_display_str.len
     call get_env
     mov r13, rsi
@@ -106,7 +101,7 @@ FN get_wayland_socket_path
         ; $ret.push_str(wayland_display_default)
         mov rdi, r12
         mov rsi, wayland_display_default.len
-        mov rdx, wayland_display_default
+        mov rdx, wayland_display_default.ptr
         call String_push_str
 
     ; }

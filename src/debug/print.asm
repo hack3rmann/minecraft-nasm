@@ -6,9 +6,8 @@
 %include "../function.s"
 
 section .rodata
-    newline       db LF
-    i32x4_fmt.ptr db "({isize}, {isize}, {isize}, {isize})", LF
-    i32x4_fmt.len equ $-i32x4_fmt.ptr
+    newline        db LF
+    STR i32x4_fmt, "({isize}, {isize}, {isize}, {isize})", LF
 
 section .text
 

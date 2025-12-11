@@ -1,6 +1,36 @@
 %ifndef _STRING_INC
 %define _STRING_INC
 
+; STR name, "value",+
+%macro STR 2-*
+    %1.ptr:
+
+    %rotate 1
+
+    %rep %0 - 1
+        db %1
+    %rotate 1
+    %endrep
+
+    %1.len equ $-%1.ptr
+%endmacro
+
+; CSTR name, "value",+
+%macro CSTR 2-*
+    %1.ptr:
+
+    %rotate 1
+
+    %rep %0 - 1
+        db %1
+    %rotate 1
+    %endrep
+
+        db 0
+
+    %1.len equ $-%1.ptr-1
+%endmacro
+
 extern cstr_match_length, cstr_len, print_cstr
 
 struc String

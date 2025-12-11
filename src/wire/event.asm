@@ -8,11 +8,11 @@
 %include "../panic.s"
 
 section .rodata
-    display_error_fmt.ptr         db "wayland error: WlDisplayError {{ ", \
-                                     "object_id: {usize}, ", \
-                                     "code: {usize}, ", \
-                                     "message: '{str}' }}", LF
-    display_error_fmt.len         equ $-display_error_fmt.ptr
+    STR display_error_fmt, \
+        "wayland error: WlDisplayError {{ ", \
+        "object_id: {usize}, ", \
+        "code: {usize}, ", \
+        "message: '{str}' }}", LF
 
 section .text
 

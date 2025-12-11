@@ -6,14 +6,10 @@
 %include "../panic.s"
 
 section .rodata
-    arg_type_usize        db "usize"
-    arg_type_usize.len    equ $-arg_type_usize
-    arg_type_isize        db "isize"
-    arg_type_isize.len    equ $-arg_type_isize
-    arg_type_str          db "str"
-    arg_type_str.len      equ $-arg_type_str
-    arg_type_cstr         db "cstr"
-    arg_type_cstr.len     equ $-arg_type_cstr
+    STR arg_type_usize, "usize"
+    STR arg_type_isize, "isize"
+    STR arg_type_str, "str"
+    STR arg_type_cstr, "cstr"
 
 section .text
 
@@ -48,7 +44,7 @@ FN parse_arg_type
     mov rdi, r12
     mov rsi, r13
     mov rdx, arg_type_usize.len
-    mov rcx, arg_type_usize
+    mov rcx, arg_type_usize.ptr
     call Str_eq
     test al, al
     mov al, ARGTYPE_USIZE
@@ -58,7 +54,7 @@ FN parse_arg_type
     mov rdi, r12
     mov rsi, r13
     mov rdx, arg_type_isize.len
-    mov rcx, arg_type_isize
+    mov rcx, arg_type_isize.ptr
     call Str_eq
     test al, al
     mov al, ARGTYPE_ISIZE
@@ -68,7 +64,7 @@ FN parse_arg_type
     mov rdi, r12
     mov rsi, r13
     mov rdx, arg_type_str.len
-    mov rcx, arg_type_str
+    mov rcx, arg_type_str.ptr
     call Str_eq
     test al, al
     mov al, ARGTYPE_STR
@@ -78,7 +74,7 @@ FN parse_arg_type
     mov rdi, r12
     mov rsi, r13
     mov rdx, arg_type_cstr.len
-    mov rcx, arg_type_cstr
+    mov rcx, arg_type_cstr.ptr
     call Str_eq
     test al, al
     mov al, ARGTYPE_CSTR
