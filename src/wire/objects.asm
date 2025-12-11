@@ -148,8 +148,8 @@ FN wire_init
 END_FN
 
 ; #[systemv]
-; fn wire_deinit()
-FN wire_deinit
+; fn wire_uninit()
+FN wire_uninit
     ; for i in 0..WIRE_MAX_N_OBJECTS {
     %assign i 0
     %rep WIRE_MAX_N_OBJECTS

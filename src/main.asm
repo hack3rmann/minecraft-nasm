@@ -72,28 +72,28 @@ section .text
 ; #[systemv]
 ; fn main() -> i64 := rax
 FN main
-    UNWIND_FN .deinit_format
-    UNWIND_FN .wire_deinit
-    UNWIND_FN .wayland_deinit
+    UNWIND_FN .format_uninit
+    UNWIND_FN .wire_uninit
+    UNWIND_FN .wayland_uninit
     ALLOC_STACK
 
-    ; init_format()
-    call init_format
+    ; format_init()
+    call format_init
 
-    ; defer { deinit_format() }
-    DEFER_FN .deinit_format, deinit_format
+    ; defer { format_uninit() }
+    DEFER_FN .format_uninit, format_uninit
 
     ; wire_init()
     call wire_init
 
-    ; defer { wire_deinit() }
-    DEFER_FN .wire_deinit, wire_deinit
+    ; defer { wire_uninit() }
+    DEFER_FN .wire_uninit, wire_uninit
 
     ; wayland_init()
     call wayland_init
 
-    ; defer { wayland_deinit() }
-    DEFER_FN .wayland_deinit, wayland_deinit
+    ; defer { wayland_uninit() }
+    DEFER_FN .wayland_uninit, wayland_uninit
 
     ; while is_window_open {
     .while:
@@ -350,8 +350,8 @@ FN wayland_init
 END_FN
 
 ; #[systemv]
-; fn wayland_deinit()
-FN wayland_deinit
+; fn wayland_uninit()
+FN wayland_uninit
     ; drop(shm)
     mov rdi, shm
     call Shm_drop

@@ -129,7 +129,7 @@ extern newline
 
 extern format_buffer
 
-extern init_format, deinit_format
+extern format_init, format_uninit
 
 extern print_uint_hex, print_uint, print_int, print_newline, print_i32x4
 
