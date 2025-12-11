@@ -6,7 +6,9 @@
 %include "../error.s"
 
 section .rodata
-    trace_fmt.ptr   db "{usize}: {str}", LF
+    trace_msg.ptr   db "Stack trace:"
+    trace_msg.len   equ $-trace_msg.ptr
+    trace_fmt.ptr   db "  {usize}: {str}", LF
     trace_fmt.len   equ $-trace_fmt.ptr
 
 section .bss
@@ -67,6 +69,8 @@ FN stack_trace_print
     .args.name  equ .args + 8
     ALLOC_STACK
 
+    DEBUG_STR trace_msg.len, trace_msg.ptr
+
     ; format_buffer.clear()
     mov rdi, format_buffer
     call String_clear
@@ -101,9 +105,9 @@ FN stack_trace_print
     jmp .for
     .end_for:
 
-    ; write(STDOUT, format_buffer.ptr, format_buffer.len)
+    ; write(STDERR, format_buffer.ptr, format_buffer.len)
     mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
+    mov rdi, STDERR
     mov rsi, qword [format_buffer + String.ptr]
     mov rdx, qword [format_buffer + String.len]
     syscall

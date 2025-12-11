@@ -60,9 +60,9 @@
 %macro DEBUG_STR 2
     PUSHA
     
-    ; write(STDOUT, str.ptr, str.len)
+    ; write(STDERR, str.ptr, str.len)
     mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
+    mov rdi, STDERR
     mov rsi, %2
     mov rdx, %1
     syscall
