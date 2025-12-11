@@ -54,10 +54,6 @@ section .bss
     ; static display_fd: usize
     display_fd            resq 1
 
-    ; static socket_path: String
-    align String.alignof
-    socket_path           resb String.sizeof
-
     addr:
         .sun_family       resw 1
         .sun_path         resb 254
@@ -166,21 +162,28 @@ END_FN
 ; #[systemv]
 ; fn wayland_init()
 FN wayland_init
+    UNWIND_PTR .drop_socket_path
+    LOCAL .socket_path, String.sizeof
+    ALLOC_STACK
+
     ; socket_path = get_wayland_socket_path()
-    mov rdi, socket_path
+    lea rdi, [rbp + .socket_path]
     call get_wayland_socket_path
+
+    ; defer { drop(socket_path) }
+    DEFER_PTR .drop_socket_path, .socket_path, String_drop
 
     ; addr.sun_family = AF_UNIX
     mov word [addr.sun_family], AF_UNIX
 
     ; assert socket_path.len <= addr_max_len - 2
-    cmp qword [socket_path + String.len], addr_max_len - 2
+    cmp qword [rbp + .socket_path + String.len], addr_max_len - 2
     ja panic
 
     ; copy(socket_path.ptr, &addr.sun_path, socket_path.len)
-    mov rdi, qword [socket_path + String.ptr]
+    mov rdi, qword [rbp + .socket_path + String.ptr]
     mov rsi, addr.sun_path
-    mov rdx, qword [socket_path + String.len]
+    mov rdx, qword [rbp + .socket_path + String.len]
     call copy
 
     ; display_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0)
@@ -196,7 +199,7 @@ FN wayland_init
     mov rax, SYSCALL_CONNECT
     mov rdi, qword [display_fd]
     mov rsi, addr
-    mov rdx, qword [socket_path + String.len]
+    mov rdx, qword [rbp + .socket_path + String.len]
     add rdx, 2
     syscall
     call exit_on_error
@@ -361,10 +364,6 @@ FN wayland_uninit
     mov rdi, qword [display_fd]
     syscall
     call exit_on_error
-
-    ; drop(socket_path)
-    mov rdi, socket_path
-    call String_drop
 END_FN
 
 ; #[systemv]
