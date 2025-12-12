@@ -21,8 +21,8 @@ cstr_match_length:
     .while:
     mov ah, byte [rsi+rcx]
     mov al, byte [rdi+rcx]
-    test ah, ah
-    jz .end_while
+    cmp ah, ah
+    jne .end_while
     test al, al
     jz .end_while
     cmp ah, al
