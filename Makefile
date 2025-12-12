@@ -45,3 +45,13 @@ clean:
 	@echo -e "    $(GREEN)Cleaning$(NC) $(BUILD)"
 	@rm -rf $(BUILD)
 	@echo -e "     $(GREEN)Removed$(NC) $$BUILD_SIZE" 
+
+.PHINY: xnasm
+xnasm: $(BUILD)/xnasm
+	@$(BUILD)/xnasm
+
+$(BUILD)/xnasm.o: xnasm.asm
+	@$(NASM) $(NASM_FLAGS) xnasm.asm -o $(BUILD)/xnasm.o
+
+$(BUILD)/xnasm: $(BUILD)/xnasm.o
+	@$(LD) $(LD_FLAGS) $(BUILD)/xnasm.o -o $(BUILD)/xnasm
