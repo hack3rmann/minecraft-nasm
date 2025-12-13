@@ -1,8 +1,17 @@
 %define SYSCALL_READ   0
 %define SYSCALL_WRITE  1
+%define SYSCALL_MMAP   9
+%define SYSCALL_MUNMAP 11
 %define SYSCALL_GETPID 39
 %define SYSCALL_EXIT   60
 %define SYSCALL_KILL   62
+
+%define PROT_READ      1
+%define PROT_WRITE     2
+%define MAP_ANONYMOUS  0x0020
+%define MAP_FAILED     0xFFFFFFFFFFFFFFFF
+%define MAP_PRIVATE    0x0002
+%define MMAP_PAGE_SIZE 4096
 
 %define SIGABRT        6
 
@@ -24,6 +33,14 @@ struc StringBuffer
     .alignof      equ 32
 endstruc
 
+struc String
+    .len          resq 1
+    .ptr          resq 1
+    .cap          resq 1
+    .sizeof       equ $-.len
+    .alignof      equ 8
+endstruc
+
 section .rodata
     hello_world.ptr   db "Hello, World!", LF
     hello_world.len   equ $-hello_world.ptr
@@ -33,8 +50,11 @@ section .data
     argv        dq 0
     stack_align dq 0
 
-    align 16
+    align StringBuffer.alignof
     stdin_buffer      times StringBuffer.sizeof db 0
+
+    align StringBuffer.alignof
+    line              times StringBuffer.sizeof db 0
 
 section .text
 
@@ -102,6 +122,88 @@ StringBuffer_fill_from:
     ret
 
 ; #[systemv]
+; fn StringBuffer::read_line_from(&mut self := rdi, (from := rsi:rdx): Str)
+StringBuffer_read_line_from:
+    push r12
+    push r13
+    push r14
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; let (from := r13:r14) = from
+    mov r13, rsi
+    mov r14, rdx
+
+    ; let (index := rcx) = 0
+    xor rcx, rcx
+
+    ; while index < READ_LEN && index < from.len {
+    .while:
+    cmp rcx, READ_LEN
+    jae .end_while
+    cmp rcx, r13
+    jae .end_while
+
+        ; let (cur := al) = from.ptr[index]
+        mov al, byte [r14 + rcx]
+
+        ; if cur == '\n' { break }
+        cmp al, LF
+        je .end_while
+
+        ; self.data[index] = cur
+        mov byte [r12 + StringBuffer.data + rcx], al
+
+        ; index += 1
+        inc rcx
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ; self.len = index
+    mov qword [r12 + StringBuffer.len], rcx
+
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; #[fastcall]
+; fn StringBuffer::clear(&mut self := rdi)
+StringBuffer_clear:
+    mov qword [rdi + StringBuffer.len], 0
+    ret
+
+; #[fastcall(rcx, al)]
+; fn StringBuffer::push_str(&mut self := rdi, (src := rsi:rdx): Str)
+StringBuffer_push_str:
+    ; for (i := rcx) in 0..src.len {
+    xor rcx, rcx
+    .for:
+    cmp rcx, rsi
+    jae .end_for
+
+        ; if i >= READ_LEN { break }
+        cmp rcx, READ_LEN
+        jae .end_for
+
+        ; self.data[i] = src.ptr[i]
+        mov al, byte [rdx + rcx]
+        mov byte [rdi + StringBuffer.data + rcx], al
+
+    ; }
+    inc rcx
+    jmp .for
+    .end_for:
+
+    ; self.len = i
+    mov qword [rdi + StringBuffer.len], rcx
+
+    ret
+
+; #[systemv]
 ; fn main() -> i64 := rax
 main:
     ; let (error := rax) = stdin_buffer.fill_from(STDIN)
@@ -113,15 +215,182 @@ main:
     test rax, rax
     jnz abort
 
-    ; write(STDOUT, &stdin_buffer.data, stdin_buffer.len)
-    mov rax, SYSCALL_WRITE
-    mov rdi, STDOUT
-    mov rsi, stdin_buffer + StringBuffer.data
-    mov rdx, qword [stdin_buffer + StringBuffer.len]
-    syscall
+    ; loop {
+    .loop:
+
+        ; line.read_line_from(stdin_buffer.as_str())
+        mov rdi, line
+        mov rsi, qword [stdin_buffer + StringBuffer.len]
+        mov rdx, stdin_buffer + StringBuffer.data
+        call StringBuffer_read_line_from
+
+        ; write(STDOUT, &line.data, line.len)
+        mov rax, SYSCALL_WRITE
+        mov rdi, STDOUT
+        mov rsi, line + StringBuffer.data
+        mov rdx, qword [line + StringBuffer.len]
+        syscall
+
+    ; }
+    jmp .loop
 
     ; return 0
     xor rax, rax
+
+    ret
+
+; #[systemv]
+; unsafe fn alloc((size := rdi): usize) -> *mut () := rax
+alloc:
+    ; let (size := rsi) = size
+    mov rsi, rdi
+
+    ; // meta info
+    ; rsi += 16
+    add rsi, 16
+
+    ; let (result := rax): *mut () = mmap(
+    ;     addr = null,
+    ;     length = size,
+    ;     prot = PROT_READ | PROT_WRITE,
+    ;     flags = MAP_ANONYMOUS | MAP_PRIVATE,
+    ;     fd = -1,
+    ;     offset = 0)
+    mov rax, SYSCALL_MMAP
+    xor rdi, rdi
+    ; mov rsi, rsi
+    mov rdx, PROT_READ | PROT_WRITE
+    mov r10, MAP_ANONYMOUS | MAP_PRIVATE
+    mov r8, -1
+    xor r9, r9
+    syscall
+
+    ; if result == MAP_FAILED { return null }
+    cmp rax, MAP_FAILED
+    mov rcx, 0
+    cmove rax, rcx
+    je .exit
+
+    ; *result.cast::<usize>() = size
+    mov qword [rax], rsi
+
+    ; result += 16
+    add rax, 16
+
+    ; return result
+    .exit:
+    ret
+
+; #[systemv]
+; unsafe fn dealloc((ptr := rdi): *mut ())
+dealloc:
+    ; if ptr == null { return }
+    test rdi, rdi
+    jz .exit
+
+    ; ptr -= 16
+    sub rdi, 16
+
+    ; let (size := rsi) = *ptr.cast::<usize>()
+    mov rsi, qword [rdi]
+
+    ; let (result := rax) = munmap(ptr, size)
+    mov rax, SYSCALL_MUNMAP
+    ; mov rdi, rdi
+    ; mov rsi, rsi
+    syscall
+
+    ; assert result == 0
+    test rax, rax
+    jnz abort
+
+    .exit:
+    ret
+
+; #[systemv]
+; unsafe fn realloc((ptr := rdi): *mut (), (size := rsi): usize) -> *mut () := rax
+realloc:
+    push r12
+    push r13
+    push r14
+
+    ; let (ptr := r12) = ptr
+    mov r12, rdi
+
+    ; let (size := r13) = size
+    mov r13, rsi
+
+    ; if size < MMAP_PAGE_SIZE - 16 {
+    cmp r13, MMAP_PAGE_SIZE - 16
+    jae .end_if
+
+        ; *(ptr - 16).cast::<usize>() = size + 16
+        lea rax, [rsi + 16]
+        mov qword [r12 - 16], rax
+
+        ; return ptr
+        mov rax, r12
+        jmp .exit
+
+    ; }
+    .end_if:
+
+    ; let (result := r14) = alloc(size)
+    mov rdi, r13
+    call alloc
+    mov r14, rax
+
+    ; let (prev_size := rax) = *(ptr - 16).cast::<usize>()
+    mov rax, qword [r12 - 16]
+
+    ; let (copy_size := rdx) = min(size, prev_size)
+    cmp r13, rax
+    mov rdx, r13
+    cmovb rdx, rax
+
+    ; copy(ptr, result, copy_size)
+    mov rdi, r12
+    mov rsi, r14
+    ; mov rdx, rdx
+    call copy
+
+    ; dealloc(ptr)
+    mov rdi, r12
+    call dealloc
+
+    ; return result
+    mov rax, r14
+
+    .exit:
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; #[fastcall(rdi, rsi, rdx, al)]
+; fn copy((source := rdi): *mut u8, (dest := rsi): *mut u8, (size := rdx): usize)
+copy:
+    ; while (size as isize) >= 0 {
+    .while:
+    cmp rdx, 0
+    jl .end_while
+
+        ; *dest = *source
+        mov al, byte [rdi]
+        mov byte [rsi], al
+
+        ; dest += 1
+        inc rsi
+
+        ; source += 1
+        inc rdi
+
+        ; size -= 1
+        dec rdx
+
+    ; }
+    jmp .while
+    .end_while:
 
     ret
 

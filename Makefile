@@ -48,7 +48,6 @@ clean:
 
 .PHINY: xnasm
 xnasm: $(BUILD)/xnasm
-	@$(BUILD)/xnasm
 
 $(BUILD)/xnasm.o: xnasm.asm
 	@$(NASM) $(NASM_FLAGS) xnasm.asm -o $(BUILD)/xnasm.o
