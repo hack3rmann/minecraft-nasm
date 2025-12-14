@@ -21,7 +21,7 @@ ASM_SRCS = $(shell find $(SRC) -name '*.asm')
 OBJS = $(patsubst $(SRC)/%.asm,$(BUILD)/%.o,$(ASM_SRCS))
 
 .PHONY: all
-all: $(BUILD)/$(EXEC_NAME)
+all: $(BUILD)/$(EXEC_NAME) xnasm
 
 .PHONY: run
 run: all
@@ -50,7 +50,9 @@ clean:
 xnasm: $(BUILD)/xnasm
 
 $(BUILD)/xnasm.o: xnasm.asm
+	@echo -e "   $(GREEN)Compiling$(NC) xnasm.asm"
 	@$(NASM) $(NASM_FLAGS) xnasm.asm -o $(BUILD)/xnasm.o
 
 $(BUILD)/xnasm: $(BUILD)/xnasm.o
+	@echo -e "     $(GREEN)Linking$(NC) xnasm" 
 	@$(LD) $(LD_FLAGS) $(BUILD)/xnasm.o -o $(BUILD)/xnasm

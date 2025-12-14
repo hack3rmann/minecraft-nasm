@@ -23,7 +23,9 @@
 
 %define LF 10
 
-%define READ_LEN       4096
+%define READ_LEN       MMAP_PAGE_SIZE
+
+%define ALIGNED(n_bytes) (n_bytes + (8 - (n_bytes % 8)) % 8)
 
 struc StringBuffer
     .len          resq 1
@@ -56,34 +58,278 @@ section .data
     align StringBuffer.alignof
     line              times StringBuffer.sizeof db 0
 
+section .bss
+    align String.alignof
+    file  resb String.sizeof
+
 section .text
 
 ; #[systemv]
-; #[noreturn]
-; #[jumpable]
-; fn abort() -> !
-abort:
-    ; let (pid := rax) = getpid()
-    mov rax, SYSCALL_GETPID
+; fn main() -> i64 := rax
+main:
+    ; file = String::new()
+    mov rdi, file
+    call String_new
+
+    ; fd_read_to_string(STDIN, &mut file)
+    mov edi, STDIN
+    mov rsi, file
+    call fd_read_to_string
+
+    ; let (n_bytes := rax) = write(STDOUT, file.ptr, file.len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, qword [file + String.ptr]
+    mov rdx, qword [file + String.len]
     syscall
 
-    ; kill(pid, SIGABRT)
-    mov rdi, rax
-    mov rax, SYSCALL_KILL
-    mov rsi, SIGABRT
-    syscall
+    ; assert n_bytes == file.len
+    cmp rax, qword [file + String.len]
+    jne abort
 
-    ; // do exit in case if SIGABRT have been handled
-    ; exit(EXIT_FAILURE)
-    mov rax, SYSCALL_EXIT
-    mov rdi, EXIT_FAILURE
-    syscall
+    ; drop(file)
+    mov rdi, file
+    call String_drop
 
-    ; // loop forever just in case
-    .loop:
-    jmp .loop
+    ; return 0
+    xor rax, rax
 
-; #[syscall]
+    ret
+
+; #[systemv]
+; fn fd_read_to_string((fd := edi): Fd, (dest := rsi): &mut String)
+fd_read_to_string:
+    push r12
+    push r13
+    push rbp
+    mov rbp, rsp
+
+    .buffer         equ -StringBuffer.sizeof
+    .stack_size     equ ALIGNED(-.buffer)
+
+    ; let (fd := r12d) = fd
+    mov r12d, edi
+
+    ; let (dest := r13) = dest
+    mov r13, rsi
+
+    ; let buffer: StringBuffer
+    sub rsp, .stack_size
+
+    ; buffer = StringBuffer::new()
+    lea rdi, [rbp + .buffer]
+    call StringBuffer_new
+
+    ; do {
+    .do:
+        
+        ; buffer.clear()
+        lea rdi, [rbp + .buffer]
+        call StringBuffer_clear
+
+        ; let (error := rax) = buffer.fill_from(fd)
+        lea rdi, [rbp + .buffer]
+        mov esi, r12d
+        call StringBuffer_fill_from
+
+        ; assert error == 0
+        test rax, rax
+        jnz abort
+
+        ; dest.push_str(buffer.as_str())
+        mov rdi, r13
+        mov rsi, qword [rbp + .buffer + StringBuffer.len]
+        lea rdx, [rbp + .buffer + StringBuffer.data]
+        call String_push_str
+
+    ; } while buffer.len == READ_LEN
+    cmp qword [rbp + .buffer + StringBuffer.len], READ_LEN
+    je .do
+
+    add rsp, .stack_size
+
+    pop rbp
+    pop r13
+    pop r12
+    ret
+
+; #[fastcall]
+; fn String::new($ret := rdi) -> String
+String_new:
+    ; return mem::zeroed()
+    mov qword [rdi + String.len], 0
+    mov qword [rdi + String.ptr], 0
+    mov qword [rdi + String.cap], 0
+
+    ret
+
+; #[systemv]
+; fn String::drop(&mut self := rdi)
+String_drop:
+    push r12
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; dealloc(self.ptr)
+    mov rdi, qword [r12 + String.ptr]
+    call dealloc
+
+    ; *self = mem::zeroed()
+    mov qword [r12 + String.len], 0
+    mov qword [r12 + String.ptr], 0
+    mov qword [r12 + String.cap], 0
+
+    pop r12
+    ret
+
+; #[systemv]
+; fn String::push_ascii(&mut self := rdi, (value := rsi): u8)
+String_push_ascii:
+    push r12
+    push r13
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; let (value := r13) = value
+    mov r13, rsi
+
+    ; if self.cap == 0 {
+    cmp qword [r12 + String.cap], 0
+    jne .else_if
+        
+        ; self.ptr = alloc(16)
+        mov rdi, 16
+        call alloc
+        mov qword [r12 + String.ptr], rax
+
+        ; self.cap = 16
+        mov qword [r12 + String.cap], 16
+
+    ; } else if (self.cap := rax) == self.len {
+    jmp .end_if
+    .else_if:
+    mov rax, qword [r12 + String.cap]
+    cmp rax, qword [r12 + String.len]
+    jne .end_if
+
+        ; self.cap += self.cap / 2
+        shr rax, 1
+        add qword [r12 + String.cap], rax
+
+        ; self.ptr = realloc(self.ptr, self.cap)
+        mov rdi, qword [r12 + String.ptr]
+        mov rsi, qword [r12 + String.cap]
+        call realloc
+        mov qword [r12 + String.ptr], rax
+
+    ; }
+    .end_if:
+
+    ; self.ptr[self.len] = value
+    mov rax, qword [r12 + String.len]
+    add rax, qword [r12 + String.ptr]
+    mov rdx, r13
+    mov byte [rax], dl
+
+    ; self.len += 1
+    inc qword [r12 + String.len]
+
+    pop r13
+    pop r12
+    ret
+
+; #[systemv]
+; fn String::push_str(&mut self := rdi, Str { len := rsi, ptr := rdx }: Str)
+String_push_str:
+    push r12
+    push r13
+    push r14
+
+    ; let (self := r12) = self
+    mov r12, rdi
+
+    ; let (str_len := r13) = len
+    mov r13, rsi
+
+    ; let (str_ptr := r14) = ptr
+    mov r14, rdx
+
+    ; if self.cap == 0 {
+    cmp qword [r12 + String.cap], 0
+    jne .else_if
+
+        ; let (new_cap := rax) = max(16, str_len)
+        mov rax, 16
+        cmp rax, r13
+        cmovb rax, r13
+
+        ; self.cap = new_cap
+        mov qword [r12 + String.cap], rax
+
+        ; self.ptr = alloc(new_cap)
+        mov rdi, rax
+        call alloc
+        mov qword [r12 + String.ptr], rax
+
+    ; } else if self.cap - self.len < str_len {
+    jmp .end_if
+    .else_if:
+    mov rax, qword [r12 + String.cap]
+    sub rax, qword [r12 + String.len]
+    cmp rax, r13
+    jae .end_if
+
+        ; let (predicted_cap := rax) = self.cap + self.cap / 2
+        mov rax, qword [r12 + String.cap]
+        shr rax, 1
+        add rax, qword [r12 + String.cap]
+
+        ; let (next_cap := rax) = if predicted_cap - self.len >= str_len
+        ; { predicted_cap } else { self.len + str_len }
+        mov rdx, qword [r12 + String.len]
+        add rdx, r13
+        mov rdi, rax
+        sub rdi, qword [r12 + String.len]
+        cmp rdi, r13
+        cmovb rax, rdx
+
+        ; self.cap = next_cap
+        mov qword [r12 + String.cap], rax
+
+        ; self.ptr = realloc(self.ptr, next_cap)
+        mov rdi, qword [r12 + String.ptr]
+        mov rsi, rax
+        call realloc
+        mov qword [r12 + String.ptr], rax
+
+    ; }
+    .end_if:
+
+    ; copy(str_ptr, self.ptr + self.len, str_len)
+    mov rdi, r14
+    mov rsi, qword [r12 + String.ptr]
+    add rsi, qword [r12 + String.len]
+    mov rdx, r13
+    call copy
+
+    ; self.len += str_len
+    add qword [r12 + String.len], r13
+
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; #[fastcall]
+; fn StringBuffer::new($ret := rdi) -> StringBuffer
+StringBuffer_new:
+    ; $ret->len = 0
+    mov qword [rdi + StringBuffer.len], 0
+    ret
+
+; #[systemv]
 ; fn StringBuffer::fill_from(&mut self := rdi, (fd := esi): Fd) -> ErrorCode := rax
 StringBuffer_fill_from:
     push r12
@@ -204,40 +450,29 @@ StringBuffer_push_str:
     ret
 
 ; #[systemv]
-; fn main() -> i64 := rax
-main:
-    ; let (error := rax) = stdin_buffer.fill_from(STDIN)
-    mov rdi, stdin_buffer
-    mov esi, STDIN
-    call StringBuffer_fill_from
+; #[noreturn]
+; #[jumpable]
+; fn abort() -> !
+abort:
+    ; let (pid := rax) = getpid()
+    mov rax, SYSCALL_GETPID
+    syscall
 
-    ; assert error == 0
-    test rax, rax
-    jnz abort
+    ; kill(pid, SIGABRT)
+    mov rdi, rax
+    mov rax, SYSCALL_KILL
+    mov rsi, SIGABRT
+    syscall
 
-    ; loop {
+    ; // do exit in case if SIGABRT have been handled
+    ; exit(EXIT_FAILURE)
+    mov rax, SYSCALL_EXIT
+    mov rdi, EXIT_FAILURE
+    syscall
+
+    ; // loop forever just in case
     .loop:
-
-        ; line.read_line_from(stdin_buffer.as_str())
-        mov rdi, line
-        mov rsi, qword [stdin_buffer + StringBuffer.len]
-        mov rdx, stdin_buffer + StringBuffer.data
-        call StringBuffer_read_line_from
-
-        ; write(STDOUT, &line.data, line.len)
-        mov rax, SYSCALL_WRITE
-        mov rdi, STDOUT
-        mov rsi, line + StringBuffer.data
-        mov rdx, qword [line + StringBuffer.len]
-        syscall
-
-    ; }
     jmp .loop
-
-    ; return 0
-    xor rax, rax
-
-    ret
 
 ; #[systemv]
 ; unsafe fn alloc((size := rdi): usize) -> *mut () := rax
