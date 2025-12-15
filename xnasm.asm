@@ -96,6 +96,7 @@ section .bss
     align ContextMacro.alignof
     context           resb ContextMacro.sizeof
     comment           equ context
+    spaces            equ context
 
     align String.alignof
     result            resb String.sizeof
@@ -243,7 +244,37 @@ main:
     cmp r12, 0
     jle .end_while
 
-        ; let comment = cur_source.parse_comment()
+        ; spaces = cur_source.parse_spaces()
+        mov rdi, r12
+        mov rsi, r13
+        call Str_parse_spaces
+        mov qword [spaces + Str.len], rax
+        mov qword [spaces + Str.ptr], rdx
+
+        ; if spaces.len != 0 {
+        cmp qword [spaces + Str.len], 0
+        je .end_if_spaces
+
+            ; cur_source = cur_source[spaces.len..]
+            sub r12, qword [spaces + Str.len]
+            add r13, qword [spaces + Str.len]
+
+            ; push_result()
+            call .push_result
+
+            ; result.push_str(comment)
+            mov rdi, result
+            mov rsi, qword [spaces + Str.len]
+            mov rdx, qword [spaces + Str.ptr]
+            call String_push_str
+
+            ; continue
+            jmp .while
+        
+        ; }
+        .end_if_spaces:
+
+        ; comment = cur_source.parse_comment()
         mov rdi, r12
         mov rsi, r13
         call Str_parse_comment
@@ -375,6 +406,45 @@ main:
     pop r14
     pop r13
     pop r12
+    ret
+
+; #[systemv]
+; fn Str::parse_spaces(self := rdi:rsi) -> rax:rdx
+Str_parse_spaces:
+    ; let ($result := rax:rdx) = self[..0]
+    xor rax, rax
+    mov rdx, rsi
+
+    ; while self.len != 0 {
+    .while:
+    test rdi, rdi
+    jz .end_while
+
+        ; let (cur := cl) = self[0]
+        mov cl, byte [rsi + 0]
+        
+        ; if cur != '\n' && cur != '\r' && cur != '\t' { break }
+        cmp cl, LF
+        setne r8b
+        cmp cl, CR
+        setne r9b
+        and r8b, r9b
+        cmp cl, TAB
+        setne r8b
+        and r8b, r9b
+        jnz .end_while
+
+        ; $result.len += 1
+        inc rax
+
+        ; self = self[1..]
+        dec rdi
+        inc rsi
+
+    ; }
+    jmp .while
+    .end_while:
+
     ret
 
 ; #[systemv]
