@@ -21,7 +21,9 @@
 %define STDOUT         1
 %define STDERR         2
 
+%define TAB 9
 %define LF 10
+%define CR 13
 
 %define READ_LEN       MMAP_PAGE_SIZE
 
@@ -43,9 +45,29 @@ struc String
     .alignof      equ 8
 endstruc
 
+struc Str
+    .len          resq 1
+    .ptr          resq 1
+    .sizeof       equ $-.len
+    .alignof      equ 8
+endstruc
+
+struc ContextMacro
+    .name         resb Str.sizeof
+    .arguments    resb Str.sizeof
+    .sizeof       equ $-.name
+    .alignof      equ 8
+endstruc
+
 section .rodata
     hello_world.ptr   db "Hello, World!", LF
     hello_world.len   equ $-hello_world.ptr
+
+    context_args.ptr  db " __FILE__, __LINE__"
+    context_args.len  equ $-context_args.ptr
+
+    comma.ptr         db ","
+    comma.len         equ $-comma.ptr
 
 section .data
     argc        dq 0
@@ -60,15 +82,102 @@ section .data
 
 section .bss
     align String.alignof
-    file  resb String.sizeof
+    file              resb String.sizeof
+
+    align ContextMacro.alignof
+    context           resb ContextMacro.sizeof
+
+    align String.alignof
+    result            resb String.sizeof
+
+%macro PUSHA 0
+    pushf
+    push rax
+    push rcx
+    push rdx
+    push rbx
+    push rsp
+    push rbp
+    push rsi
+    push rdi
+    push r8
+    push r9
+    push r10
+    push r11
+    push r12
+    push r13
+    push r14
+    push r15
+%endmacro
+
+%macro POPA 0
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop r11
+    pop r10
+    pop r9
+    pop r8
+    pop rdi
+    pop rsi
+    pop rbp
+    pop rsp
+    pop rbx
+    pop rdx
+    pop rcx
+    pop rax
+    popf
+%endmacro
+
+%macro DEBUG_STR 2
+    PUSHA
+
+    ; write(STDOUT, ptr, len)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, %2
+    mov rdx, %1
+    syscall
+
+    DEBUG_NEWLINE
+
+    POPA
+%endmacro
+
+%macro DEBUG_NEWLINE 0
+    PUSHA
+
+    ; let newline = '\n'
+    push LF
+
+    ; write(STDOUT, &newline, 1)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    mov rsi, rsp
+    mov rdx, 1
+    syscall
+
+    ; pop
+    add rsp, 8
+
+    POPA
+%endmacro
 
 section .text
 
 ; #[systemv]
 ; fn main() -> i64 := rax
 main:
+    push r12
+    push r13
+
     ; file = String::new()
     mov rdi, file
+    call String_new
+
+    ; result = String::new()
+    mov rdi, result
     call String_new
 
     ; fd_read_to_string(STDIN, &mut file)
@@ -76,24 +185,382 @@ main:
     mov rsi, file
     call fd_read_to_string
 
-    ; let (n_bytes := rax) = write(STDOUT, file.ptr, file.len)
+    ; let (cur_source := r12:r13) = file.as_str()
+    mov r12, qword [file + String.len]
+    mov r13, qword [file + String.ptr]
+
+    ; let (unmatched := r14:r15) = cur_source[..0]
+    xor r14, r14
+    mov r15, r13
+
+    ; let push_result = [&mut unmatched, &cur_source] || {
+    jmp .end_push_result
+    align 16
+    .push_result:
+
+        ; result.push_str(unmatched)
+        mov rdi, result
+        mov rsi, r14
+        mov rdx, r15
+        call String_push_str
+
+        ; unmatched = cur_source[..0]
+        xor r14, r14
+        mov r15, r13
+
+    ; }
+    ret
+    .end_push_result:
+
+    ; while cur_source.len() as isize > 0 {
+    .while:
+    cmp r12, 0
+    jle .end_while
+
+        ; (context, success := al) = cur_source.parse_context_macro()
+        mov rdi, context
+        mov rsi, r12
+        mov rdx, r13
+        call Str_parse_context_macro
+
+        ; if success {
+        test al, al
+        jz .end_if_success
+
+            ; let (len := rax) = context.name.len + 1 + context.arguments.len
+            mov rax, qword [context + ContextMacro.name + Str.len]
+            add rax, qword [context + ContextMacro.arguments + Str.len]
+            inc rax
+
+            ; cur_source = cur_source[len..]
+            sub r12, rax
+            add r13, rax
+
+            ; push_result()
+            call .push_result
+
+            ; result.push_str(context.name)
+            mov rdi, result
+            mov rsi, qword [context + ContextMacro.name + Str.len]
+            mov rdx, qword [context + ContextMacro.name + Str.ptr]
+            call String_push_str
+
+            ; result.push_str(" __FILE__, __LINE__")
+            mov rdi, result
+            mov rsi, context_args.len
+            mov rdx, context_args.ptr
+            call String_push_str
+
+            ; if context.arguments.trim().len != 0 {
+            mov rdi, qword [context + ContextMacro.arguments + Str.len]
+            mov rsi, qword [context + ContextMacro.arguments + Str.ptr]
+            call Str_trim
+            test rax, rax
+            jz .end_if_arguments
+            DEBUG_STR rax, rdx
+
+                ; result.push_str(",")
+                mov rdi, result
+                mov rsi, comma.len
+                mov rdx, comma.ptr
+                call String_push_str
+
+            ; }
+            .end_if_arguments:
+
+            ; result.push_str(context.arguments)
+            mov rdi, result
+            mov rsi, qword [context + ContextMacro.arguments + Str.len]
+            mov rdx, qword [context + ContextMacro.arguments + Str.ptr]
+            call String_push_str
+
+            ; continue
+            jmp .while
+
+        ; }
+        .end_if_success:
+
+        ; cur_source = cur_source[1..]
+        dec r12
+        inc r13
+
+        ; unmatched.len += 1
+        inc r14
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ; push_result()
+    call .push_result
+
+    ; let (n_bytes := rax) = write(STDOUT, result.ptr, result.len)
     mov rax, SYSCALL_WRITE
     mov rdi, STDOUT
-    mov rsi, qword [file + String.ptr]
-    mov rdx, qword [file + String.len]
+    mov rsi, qword [result + String.ptr]
+    mov rdx, qword [result + String.len]
     syscall
 
-    ; assert n_bytes == file.len
-    cmp rax, qword [file + String.len]
+    ; assert n_bytes == result.len
+    cmp rax, qword [result + String.len]
     jne abort
+
+    ; drop(result)
+    mov rdi, result
+    call String_drop
 
     ; drop(file)
     mov rdi, file
     call String_drop
 
-    ; return 0
+    ; return EXIT_SUCCESS
     xor rax, rax
 
+    pop r13
+    pop r12
+    ret
+
+; #[systemv]
+; fn Str::parse_context_macro($ret := rdi, self := rsi:rdx)
+;     -> (ContextMacro | undefined, (success := al): bool)
+Str_parse_context_macro:
+    push r12
+    push r13
+    push r14
+
+    ; let ($ret := r12) = $ret
+    mov r12, rdi
+
+    ; let (self := r13:r14) = self
+    mov r13, rsi
+    mov r14, rdx
+
+    ; let (ident := r8:r9) = self.parse_ident()
+    mov rdi, r13
+    mov rsi, r14
+    call Str_parse_ident
+    mov r8, rax
+    mov r9, rdx
+
+    ; if ident.len == 0 { return (undefined, false) }
+    xor al, al
+    test r8, r8
+    jz .exit
+
+    ; if ident.len == self.len { return (undefined, false) }
+    xor al, al
+    cmp r8, r13
+    je .exit
+
+    ; if ident[ident.len] != '!' { return (undefined, false) }
+    xor al, al
+    cmp byte [r9 + r8], "!"
+    jne .exit
+
+    ; $ret->name = ident
+    mov qword [r12 + ContextMacro.name + Str.len], r8
+    mov qword [r12 + ContextMacro.name + Str.ptr], r9
+    
+    ; self = self[ident.len + 1..]
+    sub r13, r8
+    dec r13
+    lea r14, [r14 + r8 + 1]
+
+    ; $ret->arguments = self.parse_until_newline()
+    mov rdi, r13
+    mov rsi, r14
+    call Str_parse_until_newline
+    mov qword [r12 + ContextMacro.arguments + Str.len], rax
+    mov qword [r12 + ContextMacro.arguments + Str.ptr], rdx
+
+    ; return ($ret, true)
+    mov al, 1
+
+    .exit:
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+; #[systemv]
+; fn Str::parse_until_newline(self := rdi:rsi) -> Str := rax:rdx
+Str_parse_until_newline:
+    ; $result = self[..0]
+    xor rax, rax
+    mov rdx, rsi
+
+    ; while $result.len < self.len {
+    .while:
+    cmp rax, rdi
+    jae .end_while
+
+        ; let (cur := cl) = $result[$result.len]
+        mov cl, byte [rdx + rax]
+
+        ; if cur == '\n' || cur == '\r' { break }
+        cmp cl, LF
+        je .end_while
+        cmp cl, CR
+        je .end_while
+
+        ; $result.len += 1
+        inc rax
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ret
+
+; #[systemv]
+; fn Str::parse_until_space(self := rdi:rsi) -> Str := rax:rdx
+Str_parse_until_space:
+    ; $result = self[..0]
+    xor rax, rax
+    mov rdx, rsi
+
+    ; while $result.len < self.len {
+    .while:
+    cmp rax, rdi
+    jae .end_while
+
+        ; let (cur := cl) = $result[$result.len]
+        mov cl, byte [rdx + rax]
+
+        ; if cur == '\n' || cur == '\r' || cur == '\t' { break }
+        cmp cl, LF
+        je .end_while
+        cmp cl, CR
+        je .end_while
+        cmp cl, TAB
+        je .end_while
+
+        ; $result.len += 1
+        inc rax
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ret
+
+; #[systemv]
+; fn Str::trim(self := rdi:rsi) -> Str := rax:rdx
+Str_trim:
+    ; while self.len != 0 {
+    .while_start:
+    test rdi, rdi
+    jz .end_while_start
+
+        ; let (cur := cl) = self[0]
+        mov cl, byte [rsi]
+
+        ; if cur != '\n' && cur != '\r' && cur != '\t' { break }
+        cmp cl, LF
+        setne ah
+        cmp cl, CR
+        setne al
+        and ah, al
+        cmp cl, TAB
+        setne al
+        test ah, al
+        jnz .end_while_start
+
+        ; self = self[1..]
+        dec rdi
+        inc rsi
+
+    ; }
+    jmp .while_start
+    .end_while_start:
+
+    ; while self.len != 0 {
+    .while_end:
+    test rdi, rdi
+    jz .end_while_end
+
+        ; let (cur := cl) = self[self.len - 1]
+        mov cl, byte [rsi + rdi - 1]
+
+        ; if cur != '\n' && cur != '\r' && cur != '\t' { break }
+        cmp cl, LF
+        setne ah
+        cmp cl, CR
+        setne al
+        and ah, al
+        cmp cl, TAB
+        setne al
+        test ah, al
+        jnz .end_while_end
+
+        ; self.len -= 1
+        dec rdi
+
+    ; }
+    jmp .while_end
+    .end_while_end:
+
+    ; return self
+    mov rax, rdi
+    mov rdx, rsi
+    
+    ret
+
+; #[systemv]
+; fn Str::parse_ident(self := rdi:rsi) -> Str := rax:rdx
+Str_parse_ident:
+    push r12
+    push r13
+
+    ; let (self := r12:r13) = self
+    mov r12, rdi
+    mov r13, rsi
+
+    ; let ($result := rax:rdx): Str = self[..0]
+    xor rax, rax
+    mov rdx, r13
+
+    ; while $result.len < self.len {
+    .while:
+    cmp rax, r12
+    jae .end_while
+
+        ; let (cur := r8b) = self.ptr[$result.len]
+        mov r8b, byte [r13 + rax]
+
+        ; let (non_lowercase := cl) = cur < 'a' || cur > 'z'
+        cmp r8b, "a"
+        setb cl
+        cmp r8b, "z"
+        setg ch
+        or cl, ch
+
+        ; let (non_uppercase := r9b) = cur < 'A' || cur > 'Z'
+        cmp r8b, "A"
+        setb r10b
+        cmp r8b, "Z"
+        setg r9b
+        or r9b, r10b
+
+        ; let (non_alpha := cl) = non_lowercase && non_uppercase
+        and cl, r9b
+
+        ; if non_alpha && cur != '_' { break }
+        cmp r8b, "_"
+        setne ch
+        test cl, ch
+        jnz .end_while
+
+        ; $result.len += 1
+        inc rax
+
+    ; }
+    jmp .while
+    .end_while:
+
+    .exit:
+    pop r13
+    pop r12
     ret
 
 ; #[systemv]

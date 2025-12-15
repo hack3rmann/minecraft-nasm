@@ -3,11 +3,13 @@ SRC = $(shell pwd)/src
 EXEC_NAME = minecraft
 
 NASM = nasm
-NASM_FLAGS = --gprefix _ -f elf64 -DDEBUG
+NASM_FLAGS_BASE = --gprefix _ -f elf64 -DDEBUG
+NASM_FLAGS = $(NASM_FLAGS_BASE)
 NASM_FLAGS_DEBUG = -F dwarf -g
 NASM_FLAGS_RELEASE = -O3
 LD = ld
-LD_FLAGS = -nostdlib
+LD_FLAGS_BASE = -nostdlib
+LD_FLAGS = $(LD_FLAGS_BASE)
 LD_FLAGS_DEBUG =
 LD_FLAGS_RELEASE = -s
 
@@ -51,8 +53,9 @@ xnasm: $(BUILD)/xnasm
 
 $(BUILD)/xnasm.o: xnasm.asm
 	@echo -e "   $(GREEN)Compiling$(NC) xnasm.asm"
-	@$(NASM) $(NASM_FLAGS) xnasm.asm -o $(BUILD)/xnasm.o
+	@mkdir -p $(dir $@)
+	@$(NASM) $(NASM_FLAGS_BASE) $(NASM_FLAGS_RELEASE) xnasm.asm -o $(BUILD)/xnasm.o
 
 $(BUILD)/xnasm: $(BUILD)/xnasm.o
 	@echo -e "     $(GREEN)Linking$(NC) xnasm" 
-	@$(LD) $(LD_FLAGS) $(BUILD)/xnasm.o -o $(BUILD)/xnasm
+	@$(LD) $(LD_FLAGS_BASE) $(LD_FLAGS_RELEASE) $(BUILD)/xnasm.o -o $(BUILD)/xnasm
