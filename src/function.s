@@ -59,7 +59,7 @@
             _ %+ %3 %+ _FN_FILE.len equ $ - _ %+ %3 %+ _FN_FILE.ptr
 
             align 8
-            _ %+ %3 %+ FN_LINE dq %2
+            _ %+ %3 %+ _FN_LINE dq %2
 
             %%fn_name.ptr equ _ %+ %3 %+ _FN_NAME.ptr
             %%fn_name.len equ _ %+ %3 %+ _FN_NAME.len
