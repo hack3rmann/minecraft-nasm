@@ -189,15 +189,15 @@ FN! Image_set_pixel
     ; let ((x, y) := r8) = (x, y)
     mov r8, rdx
 
-    ; assert x < self.width
+    ; if x >= self.width { return }
     mov rax, r8
     shr rax, 32
     cmp eax, dword [rdi + Image.width]
-    jae panic
+    jae .exit
 
-    ; assert y < self.height
+    ; if y >= self.height { return }
     cmp r8d, dword [rdi + Image.height]
-    jae panic
+    jae .exit
 
     ; let (index := rax) = x + self.width * y
     mov eax, dword [rdi + Image.width]
@@ -211,6 +211,8 @@ FN! Image_set_pixel
     shl rax, 2
     add rax, qword [rdi + Image.data]
     mov dword [rax], esi
+
+    .exit:
 END_FN
 
 ; #[systemv]
