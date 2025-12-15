@@ -53,10 +53,10 @@
 
         section .rodata
             _ %+ %3 %+ _FN_NAME.ptr db %%FN_NAME
-            _ %+ %3 %+ _FN_NAME.len db $ - _ %+ %3 %+ _FN_NAME.ptr
+            _ %+ %3 %+ _FN_NAME.len equ $ - _ %+ %3 %+ _FN_NAME.ptr
 
             _ %+ %3 %+ _FN_FILE.ptr db %1
-            _ %+ %3 %+ _FN_FILE.len db $ - _ %+ %3 %+ _FN_FILE.ptr
+            _ %+ %3 %+ _FN_FILE.len equ $ - _ %+ %3 %+ _FN_FILE.ptr
 
             align 8
             _ %+ %3 %+ FN_LINE dq %2
