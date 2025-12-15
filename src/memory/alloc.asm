@@ -33,11 +33,15 @@ FN alloc
     xor r9, r9
     syscall
 
-    ; if result == MAP_FAILED { return null }
-    cmp rax, MAP_FAILED
-    mov rcx, 0
-    cmove rax, rcx
-    je .exit
+    ; if -4095 <= result <= -1 { return null }
+    cmp rax, -4095
+    setge cl
+    cmp rax, -1
+    setle ch
+    xor rdx, rdx
+    test ch, cl
+    cmovnz rax, rdx
+    jnz .exit
 
     ; *result.cast::<usize>() = size
     mov qword [rax], rsi

@@ -59,6 +59,12 @@ struc ContextMacro
     .alignof      equ 8
 endstruc
 
+struc Comment
+    .content      resb Str.sizeof
+    .alignof      equ Str.alignof
+    .sizeof       equ $-.content
+endstruc
+
 section .rodata
     hello_world.ptr   db "Hello, World!", LF
     hello_world.len   equ $-hello_world.ptr
@@ -68,6 +74,9 @@ section .rodata
 
     comma.ptr         db ","
     comma.len         equ $-comma.ptr
+
+    here.ptr          db "HERE"
+    here.len          equ $-here.ptr
 
 section .data
     argc        dq 0
@@ -86,6 +95,7 @@ section .bss
 
     align ContextMacro.alignof
     context           resb ContextMacro.sizeof
+    comment           equ context
 
     align String.alignof
     result            resb String.sizeof
@@ -175,6 +185,9 @@ section .bss
     POPA
 %endmacro
 
+%macro ASSERT_MMAP_SUCCESS 1
+%endmacro
+
 section .text
 
 ; #[systemv]
@@ -182,6 +195,8 @@ section .text
 main:
     push r12
     push r13
+    push r14
+    push r15
 
     ; file = String::new()
     mov rdi, file
@@ -227,6 +242,36 @@ main:
     .while:
     cmp r12, 0
     jle .end_while
+
+        ; let comment = cur_source.parse_comment()
+        mov rdi, r12
+        mov rsi, r13
+        call Str_parse_comment
+        mov qword [comment + Comment.content + Str.len], rax
+        mov qword [comment + Comment.content + Str.ptr], rdx
+
+        ; if comment.len != 0 {
+        cmp qword [comment + Comment.content + Str.len], 0
+        je .end_if_comment
+
+            ; cur_source = cur_source[comment.len..]
+            sub r12, qword [comment + Comment.content + Str.len]
+            add r13, qword [comment + Comment.content + Str.len]
+
+            ; push_result()
+            call .push_result
+
+            ; result.push_str(comment)
+            mov rdi, result
+            mov rsi, qword [comment + Comment.content + Str.len]
+            mov rdx, qword [comment + Comment.content + Str.ptr]
+            call String_push_str
+
+            ; continue
+            jmp .while
+
+        ; }
+        .end_if_comment:
 
         ; (context, success := al) = cur_source.parse_context_macro()
         mov rdi, context
@@ -326,8 +371,58 @@ main:
     ; return EXIT_SUCCESS
     xor rax, rax
 
+    pop r15
+    pop r14
     pop r13
     pop r12
+    ret
+
+; #[systemv]
+; fn Str::parse_comment(self := rdi:rsi) -> rax:rdx
+Str_parse_comment:
+    ; let ($result := rax:rdx) = self[..0]
+    xor rax, rax
+    mov rdx, rsi
+
+    ; if self.len == 0 { return $result }
+    test rdi, rdi
+    jz .exit
+
+    ; if self[0] != ';' { return $result }
+    cmp byte [rsi + 0], ";"
+    jne .exit
+
+    ; $result.len += 1
+    inc rax
+
+    ; self = self[1..]
+    dec rdi
+    inc rsi
+
+    ; while self.len != 0 {
+    .while:
+    test rdi, rdi
+    jz .end_while
+
+        ; let (cur := cl) = self[0]
+        mov cl, byte [rsi + 0]
+
+        ; self = self[1..]
+        dec rdi
+        inc rsi
+
+        ; $result.len += 1
+        inc rax
+
+        ; if cur == '\n' { break }
+        cmp cl, LF
+        je .end_while
+
+    ; }
+    jmp .while
+    .end_while:
+
+    .exit:
     ret
 
 ; #[systemv]
@@ -344,6 +439,11 @@ Str_parse_context_macro:
     ; let (self := r13:r14) = self
     mov r13, rsi
     mov r14, rdx
+
+    ; if self.len == 0 { return (undefined, false) }
+    xor al, al
+    test r13, r13
+    jz .exit
 
     ; let (ident := r8:r9) = self.parse_ident()
     mov rdi, r13
@@ -745,10 +845,14 @@ String_push_str:
         ; self.cap = new_cap
         mov qword [r12 + String.cap], rax
 
-        ; self.ptr = alloc(new_cap)
+        ; (self.ptr := rax) = alloc(new_cap)
         mov rdi, rax
         call alloc
         mov qword [r12 + String.ptr], rax
+
+        ; assert self.ptr != 0
+        test rax, rax
+        jz abort
 
     ; } else if self.cap - self.len < str_len {
     jmp .end_if
@@ -763,19 +867,19 @@ String_push_str:
         shr rax, 1
         add rax, qword [r12 + String.cap]
 
-        ; let (next_cap := rax) = if predicted_cap - self.len >= str_len
+        ; let (next_cap := rax) = if predicted_cap >= str_len + self.len
         ; { predicted_cap } else { self.len + str_len }
         mov rdx, qword [r12 + String.len]
         add rdx, r13
-        mov rdi, rax
-        sub rdi, qword [r12 + String.len]
-        cmp rdi, r13
+        mov rdi, qword [r12 + String.len]
+        add rdi, r13
+        cmp rax, rdi
         cmovb rax, rdx
 
         ; self.cap = next_cap
         mov qword [r12 + String.cap], rax
 
-        ; self.ptr := rax = realloc(self.ptr, next_cap)
+        ; (self.ptr := rax) = realloc(self.ptr, next_cap)
         mov rdi, qword [r12 + String.ptr]
         mov rsi, rax
         call realloc
@@ -981,11 +1085,15 @@ alloc:
     xor r9, r9
     syscall
 
-    ; if result == MAP_FAILED { return null }
-    cmp rax, MAP_FAILED
-    mov rcx, 0
-    cmove rax, rcx
-    je .exit
+    ; if -4095 <= result <= -1 { return null }
+    cmp rax, -4095
+    setge cl
+    cmp rax, -1
+    setle ch
+    xor rdx, rdx
+    test ch, cl
+    cmovnz rax, rdx
+    jnz .exit
 
     ; *result.cast::<usize>() = size
     mov qword [rax], rsi
@@ -1121,6 +1229,8 @@ copy:
 ; fn print_uint((value := rdi): usize)
 print_uint:
     push r12
+    push rbp
+    mov rbp, rsp
 
     .n_digits         equ 24
     .digits           equ -.n_digits
@@ -1186,6 +1296,7 @@ print_uint:
 
     add rsp, .stack_size
     
+    pop rbp
     pop r12
     ret
 
