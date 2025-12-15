@@ -14,7 +14,7 @@ section .text
 
 ; #[systemv]
 ; fn Image::fill(&mut self := rdi, (color := esi): Color)
-FN Image_fill
+FN! Image_fill
     PUSH r12, r13
 
     ; let (self := r12) = self
@@ -42,7 +42,7 @@ END_FN r13, r12
 ;     ((x, y) := rdx): (u32, u32),
 ;     ((width, height) := rcx): (u32, u32),
 ; ) -> ImageSlice
-FN Image_slice
+FN! Image_slice
     PUSH r12, r13, r14
 
     ; let ($ret := r12) = $ret
@@ -95,7 +95,7 @@ END_FN r14, r13, r12
 ;     ((x, y) := rdx): (u32, u32),
 ;     ((width, height) := rcx): (u32, u32),
 ; )
-FN Image_fill_rect
+FN! Image_fill_rect
     PUSH r12, r13
 
     LOCAL .slice, ImageSlice.sizeof
@@ -131,7 +131,7 @@ END_FN rbp, r13, r12
 ;     (b := xmm1): u24f8x4,
 ;     (c := xmm2): u24f8x4,
 ; )
-FN Image_fill_triangle
+FN! Image_fill_triangle
     ; a.y = self.height as u24f8 - a.y - 1
     vpbroadcastd xmm5, dword [rdi + Image.height]
     pslld xmm5, 8
@@ -185,7 +185,7 @@ END_FN
 ;     (color := esi): Color,
 ;     ((x, y) := rdx): (u32, u32),
 ; )
-FN Image_set_pixel
+FN! Image_set_pixel
     ; let ((x, y) := r8) = (x, y)
     mov r8, rdx
 
@@ -220,7 +220,7 @@ END_FN
 ;     (from := xmm0): i24f8x4,
 ;     (to := xmm1): i24f8x4,
 ; )
-FN Image_draw_line
+FN! Image_draw_line
     PUSH r12, r13, r14, r15, rbx
 
     ; let (delta := xmm2) = to - from
@@ -375,7 +375,7 @@ END_FN rbx, r15, r14, r13, r12
 
 ; #[systemv]
 ; fn ImageSlice::fill(&mut self := rdi, (color := esi): Color)
-FN ImageSlice_fill
+FN! ImageSlice_fill
     PUSH r12, r13, r14
 
     ; let (self := r12) = self

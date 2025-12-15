@@ -21,7 +21,7 @@ section .text
 ; #[nocall]
 ; #[noreturn]
 ; pub fn start() -> !
-FN start
+FN! start
     ; Higher addresses
     ; ┌───────────────────┐
     ; │ ...               │

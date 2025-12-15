@@ -5,7 +5,7 @@ section .text
 
 ; #[fastcall(rdi, rsi, rdx, al)]
 ; fn copy((source := rdi): *mut u8, (dest := rsi): *mut u8, (size := rdx): usize)
-FN copy
+FN! copy
     ; while (size as isize) >= 0 {
     .while:
     cmp rdx, 0

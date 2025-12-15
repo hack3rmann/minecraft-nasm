@@ -9,7 +9,7 @@ section .text
 
 ; #[systemv]
 ; unsafe fn alloc((size := rdi): usize) -> *mut () := rax
-FN alloc
+FN! alloc
     ; let (size := rsi) = size
     mov rsi, rdi
 
@@ -55,7 +55,7 @@ END_FN
 
 ; #[systemv]
 ; unsafe fn dealloc((ptr := rdi): *mut ())
-FN dealloc
+FN! dealloc
     ; if ptr == null { return }
     test rdi, rdi
     jz .exit
@@ -81,7 +81,7 @@ END_FN
 
 ; #[systemv]
 ; unsafe fn realloc((ptr := rdi): *mut (), (size := rsi): usize) -> *mut () := rax
-FN realloc
+FN! realloc
     PUSH r12, r13, r14
 
     ; let (ptr := r12) = ptr

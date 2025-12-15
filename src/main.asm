@@ -66,8 +66,8 @@ section .bss
 section .text
 
 ; #[systemv]
-; fn main() -> i64 := rax
-FN main
+; pub fn main() -> i64 := rax
+FN! main
     UNWIND_FN .format_uninit
     UNWIND_FN .wire_uninit
     UNWIND_FN .wayland_uninit
@@ -138,7 +138,7 @@ END_FN
 
 ; #[systemv]
 ; fn update_surface()
-FN update_surface
+FN! update_surface
     ; wire_send_surface_attach(wl_surface_id, wl_buffer_id, 0, 0)
     mov rdi, qword [wl_surface_id]
     mov rsi, qword [wl_buffer_id]
@@ -161,7 +161,7 @@ END_FN
 
 ; #[systemv]
 ; fn wayland_init()
-FN wayland_init
+FN! wayland_init
     UNWIND_PTR .drop_socket_path
     LOCAL .socket_path, String.sizeof
     ALLOC_STACK
@@ -354,7 +354,7 @@ END_FN
 
 ; #[systemv]
 ; fn wayland_uninit()
-FN wayland_uninit
+FN! wayland_uninit
     ; drop(shm)
     mov rdi, shm
     call Shm_drop
@@ -368,7 +368,7 @@ END_FN
 
 ; #[systemv]
 ; fn handle_registry_global((_registry_id := rdi): u32)
-FN handle_registry_global
+FN! handle_registry_global
     PUSH r12, r13
 
     struc GlobalFmtArgs
@@ -502,12 +502,12 @@ END_FN r13, r12
 
 ; #[systemv]
 ; fn handle_buffer_release((buffer_id := rdi): u32)
-FN handle_buffer_release
+FN! handle_buffer_release
 END_FN
 
 ; #[systemv]
 ; fn handle_xdg_surface_configure((xdg_surface_id := rdi): u32)
-FN handle_xdg_surface_configure
+FN! handle_xdg_surface_configure
     ; let (serial := rsi) = wire_message.body.serial
     xor rsi, rsi
     mov esi, dword [wire_message + WireMessageHeader.sizeof + XdgSurfaceConfigureEvent.serial]
@@ -520,7 +520,7 @@ END_FN
 
 ; #[systemv]
 ; fn handle_wm_base_ping((wm_base_id := rdi): u32)
-FN handle_wm_base_ping
+FN! handle_wm_base_ping
     ; let (serial := rsi) = wire_message.body.serial
     xor rsi, rsi
     mov esi, dword [wire_message + WireMessageHeader.sizeof + WmBasePingEvent.serial]
@@ -533,7 +533,7 @@ END_FN
 
 ; #[systemv]
 ; fn handle_toplevel_configure((toplevel_id := rdi): u32)
-FN handle_toplevel_configure
+FN! handle_toplevel_configure
     PUSH r12
 
     ; if wire_message.width == 0 { return }
@@ -615,7 +615,7 @@ END_FN
 
 ; #[systemv]
 ; fn handle_toplevel_close((_toplevel_id := rdi): u32)
-FN handle_toplevel_close
+FN! handle_toplevel_close
     ; is_window_open = false
     mov byte [is_window_open], 0
 END_FN

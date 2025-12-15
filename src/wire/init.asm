@@ -15,7 +15,7 @@ section .text
 
 ; #[systemv]
 ; fn get_wayland_socket_path(($ret := rdi): *mut String) -> String
-FN get_wayland_socket_path
+FN! get_wayland_socket_path
     PUSH r12, r13, r14
 
     ; let ($ret := r12) = $ret

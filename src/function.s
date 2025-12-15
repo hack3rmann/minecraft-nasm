@@ -45,24 +45,29 @@
 %endmacro
 
 %ifdef DEBUG
-    ; FN <NAME>
+    ; FN __FILE__, __LINE__, <NAME>
     ;     ...
     ; END_FN
-    %macro FN 1
-        %push
-        %push
-        %push
-
-        %defstr %$FN_NAME %1
+    %macro FN 3
+        %defstr %%FN_NAME %3
 
         section .rodata
-            %$fn_name.ptr db %$FN_NAME
-            %$fn_name.len equ $-%$fn_name.ptr
+            _ %+ %3 %+ FN_NAME.ptr db %%FN_NAME
+            _ %+ %3 %+ FN_NAME.len db $ - _ %+ %3 %+ FN_NAME.ptr
+
+            _ %+ %3 %+ FN_FILE.ptr db %1
+            _ %+ %3 %+ FN_FILE.len db $ - _ %+ %3 %+ FN_FILE.ptr
+
+            align 8
+            _ %+ %3 %+ FN_LINE dq %2
+
+            %%fn_name.ptr equ _ %+ %3 %+ FN_NAME.ptr
+            %%fn_name.len equ _ %+ %3 %+ FN_NAME.len
 
         section .text
 
         align FN_ALIGN
-        %1:
+        %3:
             ; Save frame ptr
             push rbp
             mov rbp, rsp
@@ -71,8 +76,8 @@
             push rdi
             push rsi
 
-            mov rdi, %$fn_name.len
-            mov rsi, %$fn_name.ptr
+            mov rdi, %%fn_name.len
+            mov rsi, %%fn_name.ptr
             call stack_trace_push_fn
 
             pop rsi
@@ -87,20 +92,16 @@
 
             ; Empty unwind info
             PUSH 0
-
-        %pop
-        %pop
-        %pop
     %endmacro
 %else
-    ; FN <NAME>
+    ; FN __FILE__, __LINE__, <NAME>
     ;     ...
     ; END_FN
-    %macro FN 1
+    %macro FN 3
         section .text
 
         align FN_ALIGN
-        %1:
+        %3:
             ; Save frame ptr
             push rbp
             mov rbp, rsp

@@ -5,7 +5,7 @@ section .text
 
 ; #[systemv]
 ; fn set8((ptr := rdi): *mut u8, (value := sil): u8, (count := rdx): usize)
-FN set8
+FN! set8
     ; let (value := al) = value as u8
     mov al, sil
 
@@ -30,7 +30,7 @@ END_FN
 
 ; #[systemv]
 ; fn set32((ptr := rdi): *mut u32, (value := esi): u32, (count := rdx): usize)
-FN set32
+FN! set32
     PUSH r12, r13, r14
 
     ; let (ptr := r12) = ptr
@@ -117,7 +117,7 @@ END_FN r14, r13, r12
 
 ; #[systemv]
 ; fn set256((ptr := rdi): *mut u256, (value := ymm0): u256, (count := rdx): usize)
-FN set256
+FN! set256
     ; let (value := eax) = value as u32
     mov eax, esi
 

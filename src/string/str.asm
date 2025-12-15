@@ -6,7 +6,7 @@ section .text
 
 ; #[systemv]
 ; fn Str::eq((lhs := rdi:rsi): Str, (rhs := rdx:rcx): Str) -> bool := al
-FN Str_eq
+FN! Str_eq
     ; let (result := al) = false
     xor al, al
 

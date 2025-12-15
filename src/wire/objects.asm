@@ -109,7 +109,7 @@ section .text
 
 ; #[systemv]
 ; fn wire_init()
-FN wire_init
+FN! wire_init
     ; for i in 0..WIRE_MAX_N_OBJECTS {
     %assign i 0
     %rep WIRE_MAX_N_OBJECTS
@@ -149,7 +149,7 @@ END_FN
 
 ; #[systemv]
 ; fn wire_uninit()
-FN wire_uninit
+FN! wire_uninit
     ; for i in 0..WIRE_MAX_N_OBJECTS {
     %assign i 0
     %rep WIRE_MAX_N_OBJECTS
@@ -164,7 +164,7 @@ FN wire_uninit
 END_FN
 
 ; fn RegistryGlobal::new(($ret := rdi): *mut Self) -> Self
-FN RegistryGlobal_new
+FN! RegistryGlobal_new
     ; $ret->name = 0
     mov dword [rdi + RegistryGlobal.name], 0
 
@@ -177,7 +177,7 @@ FN RegistryGlobal_new
 END_FN
 
 ; fn RegistryGlobal::drop(&mut self := rdi)
-FN RegistryGlobal_drop
+FN! RegistryGlobal_drop
     PUSH r12
 
     ; let (self := r12) = self
@@ -193,7 +193,7 @@ FN RegistryGlobal_drop
 END_FN r12
 
 ; fn WlObjectType::from_str((src := rdi:rsi): Str) -> WlObjectType := al
-FN WlObjectType_from_str
+FN! WlObjectType_from_str
     PUSH r12, r13
 
     ; let (src := r12:r13) = src

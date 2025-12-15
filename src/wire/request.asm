@@ -58,7 +58,7 @@ wire_release_id:
 
 ; #[systemv]
 ; fn wire_send_display_sync() -> u32 := rax
-FN wire_send_display_sync
+FN! wire_send_display_sync
     PUSH r12
 
     ; wire_begin_request(wire_id.wl_display, wire_request.display_sync_opcode)
@@ -86,7 +86,7 @@ END_FN r12
 
 ; #[systemv]
 ; fn wire_send_display_get_registry() -> u32 := rax
-FN wire_send_display_get_registry
+FN! wire_send_display_get_registry
     PUSH r12
 
     ; wire_begin_request(wire_id.wl_display, wire_request.display_get_registry_opcode)
@@ -118,7 +118,7 @@ END_FN r12
 ;     (version := rsi): u32,
 ;     (interface := rdx:rcx): Str
 ; ) -> u32 := rax
-FN wire_send_registry_bind
+FN! wire_send_registry_bind
     PUSH r12, r13, r14, r15, rbx
 
     ; let (name := r12) = name
@@ -175,7 +175,7 @@ END_FN rbx, r15, r14, r13, r12
 
 ; #[systemv]
 ; fn wire_flush((display_fd := rdi): Fd)
-FN wire_flush
+FN! wire_flush
     PUSH r12
 
     ; let (display_fd := r12) = display_fd
@@ -220,7 +220,7 @@ END_FN r12
 ; #[systemv]
 ; #[private]
 ; fn wire_flush_fds((display_fd := rdi): Fd)
-FN wire_flush_fds
+FN! wire_flush_fds
     PUSH r12
 
     ; let io: iovec
@@ -316,7 +316,7 @@ wire_write_fd:
 
 ; #[systemv]
 ; fn wire_write_str(Str { len := rdi, ptr := rsi })
-FN wire_write_str
+FN! wire_write_str
     PUSH r12, r13
 
     ; let (len := r12) = len
@@ -395,7 +395,7 @@ wire_end_request:
 
 ; #[systemv]
 ; fn wire_send_compositor_create_surface((compositor_id := rdi): u32) -> u32 := rax
-FN wire_send_compositor_create_surface
+FN! wire_send_compositor_create_surface
     PUSH r12, r13
 
     ; let (compositor_id := r12) = compositor_id
@@ -426,7 +426,7 @@ END_FN r13, r12
 
 ; #[systemv]
 ; fn wire_send_registry_bind_global((global := rdi): &RegistryGlobal) -> u32 := rax
-FN wire_send_registry_bind_global
+FN! wire_send_registry_bind_global
     PUSH r12, r13, r14, r15
 
     ; let (global := r12) = global
@@ -450,7 +450,7 @@ END_FN r15, r14, r13, r12
 ;     (fd := rsi): u32,
 ;     (size := rdx): u32
 ; ) -> u32 := rax
-FN wire_send_shm_create_pool
+FN! wire_send_shm_create_pool
     PUSH r12, r13, r14, r15
 
     ; let (shm_id := r12) = shm_id
@@ -495,7 +495,7 @@ END_FN r15, r14, r13, r12
 
 ; #[systemv]
 ; fn wire_send_shm_pool_destroy((shm_pool_id := rdi): u32)
-FN wire_send_shm_pool_destroy
+FN! wire_send_shm_pool_destroy
     ; wire_begin_request(shm_pool_id, wire_request.shm_pool_destroy_opcode)
     ; mov rdi, rdi
     mov rsi, wire_request.shm_pool_destroy_opcode
@@ -514,7 +514,7 @@ END_FN
 ;     (stride := r8): u32,
 ;     (format := r9): WlShmFormat
 ; ) -> u32 := rax
-FN wire_send_shm_pool_create_buffer
+FN! wire_send_shm_pool_create_buffer
     PUSH r12
 
     LOCAL .format, 4
@@ -586,7 +586,7 @@ END_FN r12
 ; fn wire_send_wm_base_get_xdg_surface(
 ;     (wm_base_id := rdi): u32, (wl_surface_id := rsi): u32,
 ; ) -> u32 := rax
-FN wire_send_wm_base_get_xdg_surface
+FN! wire_send_wm_base_get_xdg_surface
     PUSH r12, r13, r14
 
     ; let (wm_base_id := r12) = wm_base_id
@@ -624,7 +624,7 @@ END_FN r14, r13, r12
 
 ; #[systemv]
 ; fn wire_send_xdg_surface_get_toplevel((xdg_surface_id := rdi): u32) -> u32 := rax
-FN wire_send_xdg_surface_get_toplevel
+FN! wire_send_xdg_surface_get_toplevel
     PUSH r12, r13
 
     ; let (xdg_surface_id := r12) = xdg_surface_id
@@ -666,7 +666,7 @@ END_FN r13, r12
 ;     Str { title_len := rsi, title_ptr := rdx } @ title,
 ; )
 wire_send_xdg_toplevel_set_app_id equ wire_send_xdg_toplevel_set_title
-FN wire_send_xdg_toplevel_set_title
+FN! wire_send_xdg_toplevel_set_title
     PUSH r12, r13, r14
 
     ; let (xdg_toplevel_id := r12) = xdg_toplevel_id
@@ -698,7 +698,7 @@ END_FN r14, r13, r12
 ;     (x := rdx): u32,
 ;     (y := rcx): u32,
 ; )
-FN wire_send_surface_attach
+FN! wire_send_surface_attach
     PUSH r12, r13, r14, r15
 
     ; let (wl_surface_id := r12) = wl_surface_id
@@ -741,7 +741,7 @@ END_FN r15, r14, r13, r12
 ;     (width := rcx): u32,
 ;     (height := r8): u32,
 ; )
-FN wire_send_surface_damage
+FN! wire_send_surface_damage
     PUSH r12, r13, r14, r15, rbx
 
     ; let (wl_surface_id := r12) = wl_surface_id
@@ -786,7 +786,7 @@ END_FN rbx, r15, r14, r13, r12
 
 ; #[systemv]
 ; fn wire_send_surface_commit((wl_surface_id := rdi): u32)
-FN wire_send_surface_commit
+FN! wire_send_surface_commit
     ; wire_begin_request(wl_surface_id, wire_request.surface_commit_opcode)
     ; mov rdi, rdi
     mov rsi, wire_request.surface_commit_opcode
@@ -798,7 +798,7 @@ END_FN
 
 ; #[systemv]
 ; fn wire_send_xdg_surface_ack_configure((xdg_surface_id := rdi): u32, (serial := rsi): u32)
-FN wire_send_xdg_surface_ack_configure
+FN! wire_send_xdg_surface_ack_configure
     PUSH r12, r13
 
     ; let (xdg_surface_id := r12) = xdg_surface_id
@@ -821,7 +821,7 @@ FN wire_send_xdg_surface_ack_configure
 END_FN r13, r12
 
 ; fn wire_send_wm_base_pong((wm_base_id := rdi): u32, (serial := rsi): u32)
-FN wire_send_wm_base_pong
+FN! wire_send_wm_base_pong
     PUSH r12, r13
 
     ; let (wm_base_id := r12) = wm_base_id
@@ -845,7 +845,7 @@ END_FN r13, r12
 
 ; #[systemv]
 ; fn wire_send_buffer_destroy((wl_buffer_id := rdi): u32)
-FN wire_send_buffer_destroy
+FN! wire_send_buffer_destroy
     ; wire_begin_request(wl_buffer_id, wire_request.buffer_destroy_opcode)
     ; mov rdi, rdi
     mov rsi, wire_request.buffer_destroy_opcode

@@ -59,7 +59,7 @@ stack_trace_pop_fn:
 ; #[nothrow]
 ; #[systemv]
 ; fn stack_trace_print()
-FN stack_trace_print
+FN! stack_trace_print
     PUSH r12
 
     LOCAL .args, 8 + Str.sizeof

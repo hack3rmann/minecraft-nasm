@@ -9,7 +9,7 @@ section .text
 ; #[noreturn]
 ; #[jumpable]
 ; fn abort() -> !
-FN abort
+FN! abort
     ; stack_trace_print()
     call stack_trace_print
 

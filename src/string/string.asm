@@ -9,7 +9,7 @@ section .text
 
 ; #[systemv]
 ; fn String::new(($return := rdi): *mut Self) -> Self
-FN String_new
+FN! String_new
     ; $return->len = 0
     mov qword [rdi + String.len], 0
 
@@ -22,7 +22,7 @@ END_FN
 
 ; #[systemv]
 ; fn String::with_capacity(($return := rdi): *mut Self, (capacity := rsi): usize) -> Self
-FN String_with_capacity
+FN! String_with_capacity
     PUSH r12
 
     ; let (self := r12) = self
@@ -47,7 +47,7 @@ END_FN r12
 
 ; #[systemv]
 ; fn String::reserve_exact(&mut self := rdi, (additional := rsi): usize)
-FN String_reserve_exact
+FN! String_reserve_exact
     PUSH r12
 
     ; let (self := r12) = self
@@ -93,7 +93,7 @@ END_FN r12
 ;
 ; #[systemv]
 ; fn String::reserve(&mut self := rdi, (additional := rsi): usize)
-FN String_reserve
+FN! String_reserve
     PUSH r12
 
     ; let (self := r12) = self
@@ -119,7 +119,7 @@ END_FN r12
 
 ; #[systemv]
 ; fn String::push_ascii(&mut self := rdi, (value := rsi): u8)
-FN String_push_ascii
+FN! String_push_ascii
     PUSH r12, r13
 
     ; let (self := r12) = self
@@ -172,7 +172,7 @@ END_FN r13, r12
 
 ; #[systemv]
 ; fn String::push_str(&mut self := rdi, Str { len := rsi, ptr := rdx }: Str)
-FN String_push_str
+FN! String_push_str
     PUSH r12, r13, r14
 
     ; let (self := r12) = self
@@ -248,7 +248,7 @@ END_FN r14, r13, r12
 
 ; #[systemv]
 ; fn String::push_cstr(&mut self := rdi, (cstr := rsi): *mut u8)
-FN String_push_cstr
+FN! String_push_cstr
     ; let (len := rdx) = cstr_len(cstr)
     ; mov rsi, rsi
     call cstr_len
@@ -272,7 +272,7 @@ String_clear:
 
 ; #[systemv]
 ; fn String::drop(&mut self := rdi)
-FN String_drop
+FN! String_drop
     PUSH r12
 
     ; let (self := r12) = self
@@ -294,7 +294,7 @@ END_FN r12
 
 ; #[systemv]
 ; fn String::format_i64(&mut self := rdi, (value := rsi): i64)
-FN String_format_i64
+FN! String_format_i64
     PUSH r12, r13, rbx
 
     .n_digits equ 24
@@ -387,7 +387,7 @@ END_FN rbx, r13, r12
 
 ; #[systemv]
 ; fn String::format_u64(&mut self := rdi, (value := rsi): u64)
-FN String_format_u64
+FN! String_format_u64
     PUSH r12, r13
 
     .n_digits equ 24

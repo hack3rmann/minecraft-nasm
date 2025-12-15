@@ -13,7 +13,7 @@ section .text
 
 ; #[systemv]
 ; fn print_int((value := rdi): i64)
-FN print_int
+FN! print_int
     PUSH r12, r13, rbx
 
     .n_digits           equ 24
@@ -103,7 +103,7 @@ END_FN rbx, r13, r12
 
 ; #[systemv]
 ; fn print_uint((value := rdi): usize)
-FN print_uint
+FN! print_uint
     .n_digits equ 24
     LOCAL .digits, .n_digits
     ALLOC_STACK
@@ -159,7 +159,7 @@ FN print_uint
 END_FN
 
 ; fn print_uint_hex((value := rdi): usize)
-FN print_uint_hex
+FN! print_uint_hex
     .n_digits equ 16
     LOCAL .digits, 24
     ALLOC_STACK
@@ -217,7 +217,7 @@ END_FN
 
 ; #[systemv]
 ; fn print_newline()
-FN print_newline
+FN! print_newline
     ; write(STDOUT, &newline, 1)
     mov rax, SYSCALL_WRITE
     mov rdi, STDOUT
@@ -229,7 +229,7 @@ END_FN
 
 ; #[systemv]
 ; fn print_i32x4((value := xmm0): i32x4)
-FN print_i32x4
+FN! print_i32x4
     LOCAL .values, 64
     ALLOC_STACK
 
