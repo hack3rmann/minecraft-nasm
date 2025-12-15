@@ -52,17 +52,17 @@
         %defstr %%FN_NAME %3
 
         section .rodata
-            _ %+ %3 %+ FN_NAME.ptr db %%FN_NAME
-            _ %+ %3 %+ FN_NAME.len db $ - _ %+ %3 %+ FN_NAME.ptr
+            _ %+ %3 %+ _FN_NAME.ptr db %%FN_NAME
+            _ %+ %3 %+ _FN_NAME.len db $ - _ %+ %3 %+ _FN_NAME.ptr
 
-            _ %+ %3 %+ FN_FILE.ptr db %1
-            _ %+ %3 %+ FN_FILE.len db $ - _ %+ %3 %+ FN_FILE.ptr
+            _ %+ %3 %+ _FN_FILE.ptr db %1
+            _ %+ %3 %+ _FN_FILE.len db $ - _ %+ %3 %+ _FN_FILE.ptr
 
             align 8
             _ %+ %3 %+ FN_LINE dq %2
 
-            %%fn_name.ptr equ _ %+ %3 %+ FN_NAME.ptr
-            %%fn_name.len equ _ %+ %3 %+ FN_NAME.len
+            %%fn_name.ptr equ _ %+ %3 %+ _FN_NAME.ptr
+            %%fn_name.len equ _ %+ %3 %+ _FN_NAME.len
 
         section .text
 
