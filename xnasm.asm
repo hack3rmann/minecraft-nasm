@@ -164,6 +164,17 @@ section .bss
     POPA
 %endmacro
 
+%macro DEBUG_UINT 1
+    PUSHA
+
+    mov rdi, %1
+    call print_uint
+
+    DEBUG_NEWLINE
+
+    POPA
+%endmacro
+
 section .text
 
 ; #[systemv]
@@ -257,7 +268,6 @@ main:
             call Str_trim
             test rax, rax
             jz .end_if_arguments
-            DEBUG_STR rax, rdx
 
                 ; result.push_str(",")
                 mov rdi, result
@@ -765,11 +775,15 @@ String_push_str:
         ; self.cap = next_cap
         mov qword [r12 + String.cap], rax
 
-        ; self.ptr = realloc(self.ptr, next_cap)
+        ; self.ptr := rax = realloc(self.ptr, next_cap)
         mov rdi, qword [r12 + String.ptr]
         mov rsi, rax
         call realloc
         mov qword [r12 + String.ptr], rax
+
+        ; assert self.ptr != null
+        test rax, rax
+        jz abort
 
     ; }
     .end_if:
@@ -1042,19 +1056,26 @@ realloc:
     call alloc
     mov r14, rax
 
+    ; if result == null { jmp alloc_error }
+    test r14, r14
+    jz .alloc_error
+
     ; let (prev_size := rax) = *(ptr - 16).cast::<usize>()
     mov rax, qword [r12 - 16]
 
     ; let (copy_size := rdx) = min(size, prev_size)
     cmp r13, rax
     mov rdx, r13
-    cmovb rdx, rax
+    cmova rdx, rax
 
     ; copy(ptr, result, copy_size)
     mov rdi, r12
     mov rsi, r14
     ; mov rdx, rdx
     call copy
+
+    ; 'alloc_error:
+    .alloc_error:
 
     ; dealloc(ptr)
     mov rdi, r12
@@ -1094,6 +1115,78 @@ copy:
     jmp .while
     .end_while:
 
+    ret
+
+; #[systemv]
+; fn print_uint((value := rdi): usize)
+print_uint:
+    push r12
+
+    .n_digits         equ 24
+    .digits           equ -.n_digits
+    .stack_size       equ ALIGNED(-.digits)
+
+    ; let digits: [u8; 24]
+    sub rsp, .stack_size
+
+    ; digits[-1] = b'0'
+    mov byte [rbp+.digits+.n_digits-1], "0"
+
+    ; let n_digits = 0
+    xor rcx, rcx
+
+    ; while value != 0 {
+    .while:
+    test rdi, rdi
+    jz .end_while
+
+        ; let ({ value / 10 } := rax, digit_value := rdx) = divmod(value, 10)
+        xor rdx, rdx
+        mov rax, rdi
+        mov r8, 10
+        div r8
+
+        ; value = value / 10
+        mov rdi, rax
+
+        ; let (digit := dl) = (digit_value + '0') as u8
+        add rdx, "0"
+
+        ; digits[digits.len - 1 - n_digits] = digit
+        mov r8, rcx
+        neg r8
+        mov byte [rbp + .digits + .n_digits - 1 + r8], dl
+
+        ; n_digits += 1
+        inc rcx
+
+    ; }
+    jmp .while
+    .end_while:
+
+    ; if n_digits == 0 { n_digits = 1 }
+    test rcx, rcx
+    mov rax, 1
+    cmovz rcx, rax
+
+    ; let (n_digits := r12) = n_digits
+    mov r12, rcx
+
+    ; let (n_bytes := rax) = write(STDOUT, &digits + digits.len - n_digits, n_digits)
+    mov rax, SYSCALL_WRITE
+    mov rdi, STDOUT
+    lea rsi, [rbp + .digits + .n_digits]
+    sub rsi, r12
+    mov rdx, r12
+    syscall
+
+    ; assert n_bytes == n_digits
+    cmp rax, r12
+    jne abort
+
+    add rsp, .stack_size
+    
+    pop r12
     ret
 
 global start

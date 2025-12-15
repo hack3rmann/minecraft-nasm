@@ -7,6 +7,7 @@ NASM_FLAGS_BASE = --gprefix _ -f elf64 -DDEBUG
 NASM_FLAGS = $(NASM_FLAGS_BASE)
 NASM_FLAGS_DEBUG = -F dwarf -g
 NASM_FLAGS_RELEASE = -O3
+
 LD = ld
 LD_FLAGS_BASE = -nostdlib
 LD_FLAGS = $(LD_FLAGS_BASE)
@@ -22,8 +23,10 @@ NC = \033[0m
 ASM_SRCS = $(shell find $(SRC) -name '*.asm')
 OBJS = $(patsubst $(SRC)/%.asm,$(BUILD)/%.o,$(ASM_SRCS))
 
+.ONESHELL:
+
 .PHONY: all
-all: $(BUILD)/$(EXEC_NAME) xnasm
+all: $(BUILD)/$(EXEC_NAME)
 
 .PHONY: run
 run: all
@@ -31,25 +34,22 @@ run: all
 	@$(BUILD)/$(EXEC_NAME)
 
 .SECONDEXPANSION:
-$(BUILD)/%.o: $(SRC)/%.asm $$(shell mk/deps $(SRC)/%.asm)
+$(BUILD)/%.o: $(SRC)/%.asm $$(shell mk/deps $(SRC)/%.asm) $(BUILD)/xnasm
 	@echo -e "   $(GREEN)Compiling$(NC) $*.asm"
 	@mkdir -p $(dir $@)
-	@(cd $(dir $<) && $(NASM) $(NASM_FLAGS) $(notdir $<) -o $@)
+	@(cd $(dir $<) && cat $(notdir $<) | $(BUILD)/xnasm >$@.mod.asm)
+	@(cd $(dir $<) && $(NASM) -I$(SRC) $(NASM_FLAGS) $@.mod.asm -o $@)
 
 $(BUILD)/$(EXEC_NAME): $(OBJS)
 	@echo -e "     $(GREEN)Linking$(NC) $(EXEC_NAME)" 
 	@$(LD) $(LD_FLAGS) $(OBJS) -o $(BUILD)/$(EXEC_NAME)
 
 .PHONY: clean
-.ONESHELL: clean
 clean:
 	@BUILD_SIZE=$$((du -h ./build 2>/dev/null || echo 0B) | tail -1 | rg '\d+\w' -o)
 	@echo -e "    $(GREEN)Cleaning$(NC) $(BUILD)"
 	@rm -rf $(BUILD)
 	@echo -e "     $(GREEN)Removed$(NC) $$BUILD_SIZE" 
-
-.PHINY: xnasm
-xnasm: $(BUILD)/xnasm
 
 $(BUILD)/xnasm.o: xnasm.asm
 	@echo -e "   $(GREEN)Compiling$(NC) xnasm.asm"

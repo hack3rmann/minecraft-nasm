@@ -20,9 +20,6 @@ FN print_int
     LOCAL .digits, .n_digits
     ALLOC_STACK
 
-    ; let digits: [u8; 24]
-    sub rsp, .stack_size
-
     ; digits[-1] = b'0'
     mov byte [rbp + .digits + .n_digits - 1], "0"
 
@@ -110,9 +107,6 @@ FN print_uint
     .n_digits equ 24
     LOCAL .digits, .n_digits
     ALLOC_STACK
-
-    ; let digits: [u8; 24]
-    sub rsp, .stack_size
 
     ; digits[-1] = b'0'
     mov byte [rbp+.digits+.n_digits-1], "0"

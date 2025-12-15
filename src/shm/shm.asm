@@ -101,7 +101,7 @@ FN Shm_drop
     mov rdi, qword [r12 + Shm.ptr]
     mov rsi, qword [r12 + Shm.size]
     syscall
-    CALL! exit_on_error
+    call exit_on_error
 
     ; close(self.fd)
     mov rax, SYSCALL_CLOSE

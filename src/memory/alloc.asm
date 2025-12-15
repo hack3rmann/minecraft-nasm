@@ -112,7 +112,7 @@ FN realloc
     ; let (copy_size := rdx) = min(size, prev_size)
     cmp r13, rax
     mov rdx, r13
-    cmovb rdx, rax
+    cmova rdx, rax
 
     ; copy(ptr, result, copy_size)
     mov rdi, r12
